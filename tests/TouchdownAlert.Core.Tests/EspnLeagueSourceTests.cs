@@ -1,8 +1,8 @@
 using System.Net;
 using Microsoft.Extensions.Logging.Abstractions;
-using Microsoft.Extensions.Options;
 using TouchdownAlert.Core.Configuration;
 using TouchdownAlert.Core.Espn;
+using TouchdownAlert.Core.Models;
 
 namespace TouchdownAlert.Core.Tests;
 
@@ -11,7 +11,7 @@ public class EspnLeagueSourceTests
     [Fact]
     public void BuildRequestUri_WithoutScoringPeriodId_OmitsParameter()
     {
-        var options = new EspnOptions { BaseUrl = "https://lm-api-reads.fantasy.espn.com", LeagueId = 998946988 };
+        var options = new LeagueOptions { Key = "main", BaseUrl = "https://lm-api-reads.fantasy.espn.com", LeagueId = "998946988" };
 
         var uri = EspnLeagueSource.BuildRequestUri(options, 2026);
 
@@ -23,11 +23,21 @@ public class EspnLeagueSourceTests
     [Fact]
     public void BuildRequestUri_WithScoringPeriodId_AppendsParameter()
     {
-        var options = new EspnOptions { BaseUrl = "https://lm-api-reads.fantasy.espn.com", LeagueId = 998946988, ScoringPeriodId = 3 };
+        var options = new LeagueOptions { Key = "main", BaseUrl = "https://lm-api-reads.fantasy.espn.com", LeagueId = "998946988", ScoringPeriodId = 3 };
 
         var uri = EspnLeagueSource.BuildRequestUri(options, 2026);
 
         Assert.EndsWith("&scoringPeriodId=3", uri.ToString());
+    }
+
+    [Fact]
+    public void BuildRequestUri_WithoutBaseUrl_UsesEspnDefault()
+    {
+        var options = new LeagueOptions { Key = "main", LeagueId = "998946988" };
+
+        var uri = EspnLeagueSource.BuildRequestUri(options, 2026);
+
+        Assert.StartsWith("https://lm-api-reads.fantasy.espn.com/", uri.ToString());
     }
 
     [Fact]
@@ -41,14 +51,16 @@ public class EspnLeagueSourceTests
         var httpClient = new HttpClient(handler) { BaseAddress = new Uri("https://lm-api-reads.fantasy.espn.com") };
         var source = new EspnLeagueSource(
             httpClient,
-            Options.Create(new EspnOptions { LeagueId = 998946988 }),
+            new LeagueOptions { Key = "main", LeagueId = "998946988" },
             TimeProvider.System,
             NullLogger<EspnLeagueSource>.Instance);
 
         var snapshot = await source.GetSnapshotAsync(CancellationToken.None);
 
         Assert.Equal(10, snapshot.Teams.Count);
-        Assert.Equal(998946988, snapshot.LeagueId);
+        Assert.Equal("main", snapshot.League.Key);
+        Assert.Equal("998946988", snapshot.League.LeagueId);
+        Assert.Equal(LeagueProvider.Espn, snapshot.League.Provider);
     }
 
     [Fact]
@@ -61,7 +73,7 @@ public class EspnLeagueSourceTests
         var httpClient = new HttpClient(handler) { BaseAddress = new Uri("https://lm-api-reads.fantasy.espn.com") };
         var source = new EspnLeagueSource(
             httpClient,
-            Options.Create(new EspnOptions { LeagueId = 998946988 }),
+            new LeagueOptions { Key = "main", LeagueId = "998946988" },
             TimeProvider.System,
             NullLogger<EspnLeagueSource>.Instance);
 
@@ -79,7 +91,7 @@ public class EspnLeagueSourceTests
         var httpClient = new HttpClient(handler) { BaseAddress = new Uri("https://lm-api-reads.fantasy.espn.com") };
         var source = new EspnLeagueSource(
             httpClient,
-            Options.Create(new EspnOptions { LeagueId = 998946988 }),
+            new LeagueOptions { Key = "main", LeagueId = "998946988" },
             TimeProvider.System,
             NullLogger<EspnLeagueSource>.Instance);
 

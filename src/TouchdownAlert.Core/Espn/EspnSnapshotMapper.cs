@@ -10,9 +10,10 @@ public static class EspnSnapshotMapper
     /// Builds a <see cref="LeagueSnapshot"/> from an ESPN league response. Never throws for the shapes ESPN
     /// actually sends, including the preseason shape where rosters are empty and scoringPeriodId is 0.
     /// </summary>
-    public static LeagueSnapshot Map(EspnLeagueResponse response, DateTimeOffset fetchedAt)
+    public static LeagueSnapshot Map(EspnLeagueResponse response, LeagueRef league, DateTimeOffset fetchedAt)
     {
         ArgumentNullException.ThrowIfNull(response);
+        ArgumentNullException.ThrowIfNull(league);
 
         var matchupPeriodId = response.Status?.CurrentMatchupPeriod ?? 0;
         var scoringPeriodId = ResolveScoringPeriodId(response, matchupPeriodId);
@@ -58,7 +59,7 @@ public static class EspnSnapshotMapper
         }
 
         return new LeagueSnapshot(
-            LeagueId: response.Id,
+            League: league,
             LeagueName: response.Settings?.Name ?? $"League {response.Id}",
             SeasonId: response.SeasonId,
             ScoringPeriodId: scoringPeriodId,

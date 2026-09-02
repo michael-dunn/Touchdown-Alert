@@ -7,55 +7,67 @@ using TouchdownAlert.Core.Models;
 namespace TouchdownAlert.App.Services;
 
 /// <summary>
-/// Thread-safe in-memory snapshot of everything the dashboard needs to render:
-/// last league snapshot, poll health, and a capped alert log. Single source of
-/// truth consumed by the HTTP endpoints, the SignalR hub, and PollingService/AlertDispatcher.
+/// Thread-safe in-memory snapshot of everything the dashboard needs to render, partitioned per league:
+/// last snapshot, poll health, detector-seeded flag, plus a capped alert log shared across all leagues.
+/// Single source of truth consumed by the HTTP endpoints, the SignalR hub, and PollingService/AlertDispatcher.
 /// </summary>
 public sealed class DashboardState
 {
     private const int MaxAlertLogEntries = 200;
 
     private readonly object _lock = new();
-    private readonly IOptionsMonitor<AlertOptions> _alertOptions;
+    private readonly IAlertRouter _alertRouter;
+    private readonly IOptionsMonitor<LeaguesOptions> _leaguesOptions;
     private readonly ISoundFileResolver _soundResolver;
 
-    private LeagueSnapshot? _lastSnapshot;
-    private DateTimeOffset? _lastPollAt;
+    private readonly Dictionary<string, LeagueRuntimeState> _leagues = new(StringComparer.OrdinalIgnoreCase);
     private DateTimeOffset? _nextPollAt;
-    private string? _lastError;
     private long _pollCount;
-    private bool _detectorSeeded;
     private readonly List<AlertLogEntryViewModel> _alertLog = new();
 
-    public DashboardState(IOptionsMonitor<AlertOptions> alertOptions, ISoundFileResolver soundResolver)
+    public DashboardState(IAlertRouter alertRouter, IOptionsMonitor<LeaguesOptions> leaguesOptions, ISoundFileResolver soundResolver)
     {
-        _alertOptions = alertOptions;
+        _alertRouter = alertRouter;
+        _leaguesOptions = leaguesOptions;
         _soundResolver = soundResolver;
     }
 
-    /// <summary>Last successfully fetched snapshot, if any. Used by the test-alert endpoint.</summary>
-    public LeagueSnapshot? LastSnapshot
+    /// <summary>Last successfully fetched snapshot for the given league, if any. Used by the test-alert endpoint.</summary>
+    public LeagueSnapshot? GetSnapshot(string leagueKey)
     {
-        get { lock (_lock) { return _lastSnapshot; } }
+        lock (_lock)
+        {
+            return _leagues.TryGetValue(leagueKey, out var state) ? state.Snapshot : null;
+        }
     }
 
     public void RecordSnapshot(LeagueSnapshot snapshot, DateTimeOffset pollTime, bool detectorSeeded)
     {
         lock (_lock)
         {
-            _lastSnapshot = snapshot;
-            _lastPollAt = pollTime;
-            _lastError = null;
-            _detectorSeeded = detectorSeeded;
-            _pollCount++;
+            var state = GetOrCreate(snapshot.League.Key);
+            state.Snapshot = snapshot;
+            state.LastPollAt = pollTime;
+            state.LastError = null;
+            state.DetectorSeeded = detectorSeeded;
         }
     }
 
-    public void RecordError(string error)
+    public void RecordError(string leagueKey, string error)
     {
         lock (_lock)
         {
-            _lastError = error;
+            var state = GetOrCreate(leagueKey);
+            state.LastError = error;
+        }
+    }
+
+    /// <summary>Call once per completed poll cycle (regardless of how many leagues it covered).</summary>
+    public void RecordPollCycle()
+    {
+        lock (_lock)
+        {
+            _pollCount++;
         }
     }
 
@@ -67,11 +79,24 @@ public sealed class DashboardState
         }
     }
 
+    /// <summary>Resets the seeded flag for every league.</summary>
     public void ResetDetectorSeeded()
     {
         lock (_lock)
         {
-            _detectorSeeded = false;
+            foreach (var state in _leagues.Values)
+            {
+                state.DetectorSeeded = false;
+            }
+        }
+    }
+
+    /// <summary>Resets the seeded flag for one league.</summary>
+    public void ResetDetectorSeeded(string leagueKey)
+    {
+        lock (_lock)
+        {
+            GetOrCreate(leagueKey).DetectorSeeded = false;
         }
     }
 
@@ -82,6 +107,7 @@ public sealed class DashboardState
             _alertLog.Insert(0, new AlertLogEntryViewModel(
                 alert.At,
                 alert.TeamId,
+                alert.LeagueKey,
                 alert.TeamLabel,
                 alert.Touchdown.PlayerName,
                 alert.Touchdown.Type.ToString(),
@@ -101,32 +127,72 @@ public sealed class DashboardState
     {
         lock (_lock)
         {
-            var snapshot = _lastSnapshot;
-            var watchedTeams = _alertOptions.CurrentValue.WatchedTeams
-                .Select(w => BuildTeamViewModel(w, snapshot))
+            var configuredLeagues = _leaguesOptions.CurrentValue.Items;
+
+            var leagueViewModels = configuredLeagues
+                .Select(l =>
+                {
+                    var state = _leagues.GetValueOrDefault(l.Key);
+                    return new LeagueViewModel(
+                        Key: l.Key,
+                        Provider: l.Provider.ToString(),
+                        LeagueId: l.LeagueId,
+                        Name: state?.Snapshot?.LeagueName,
+                        Season: state?.Snapshot?.SeasonId,
+                        Week: state?.Snapshot?.ScoringPeriodId,
+                        LastPollAt: state?.LastPollAt,
+                        LastError: state?.LastError,
+                        DetectorSeeded: state?.DetectorSeeded ?? false);
+                })
+                .ToList();
+
+            var hasSnapshot = _leagues.Values.Any(s => s.Snapshot is not null);
+            var detectorSeeded = configuredLeagues.Count > 0 && leagueViewModels.All(l => l.DetectorSeeded);
+            var first = leagueViewModels.FirstOrDefault();
+            var firstError = leagueViewModels.Select(l => l.LastError).FirstOrDefault(e => e is not null);
+            var lastPollAt = leagueViewModels.Select(l => l.LastPollAt).Where(t => t.HasValue).Select(t => t!.Value).DefaultIfEmpty().Max();
+
+            var watchedTeams = _alertRouter.WatchedTeams
+                .Select(BuildTeamViewModel)
                 .ToList();
 
             var poll = new PollHealthViewModel(
-                Ok: _lastError is null,
-                LastPollAt: _lastPollAt,
+                Ok: firstError is null,
+                LastPollAt: lastPollAt == default ? null : lastPollAt,
                 NextPollAt: _nextPollAt,
-                LastError: _lastError,
+                LastError: firstError,
                 PollCount: _pollCount);
 
             return new DashboardViewModel(
-                LeagueName: snapshot?.LeagueName,
-                SeasonId: snapshot?.SeasonId,
-                Week: snapshot?.ScoringPeriodId,
-                HasSnapshot: snapshot is not null,
-                DetectorSeeded: _detectorSeeded,
+                LeagueName: first?.Name,
+                SeasonId: first?.Season,
+                Week: first?.Week,
+                HasSnapshot: hasSnapshot,
+                DetectorSeeded: detectorSeeded,
                 Poll: poll,
+                Leagues: leagueViewModels,
                 WatchedTeams: watchedTeams,
                 RecentAlerts: _alertLog.ToList());
         }
     }
 
-    private WatchedTeamViewModel BuildTeamViewModel(WatchedTeamOptions watched, LeagueSnapshot? snapshot)
+    private LeagueRuntimeState GetOrCreate(string leagueKey)
     {
+        if (!_leagues.TryGetValue(leagueKey, out var state))
+        {
+            state = new LeagueRuntimeState();
+            _leagues[leagueKey] = state;
+        }
+
+        return state;
+    }
+
+    private WatchedTeamViewModel BuildTeamViewModel(WatchedTeamOptions watched)
+    {
+        var leagueKey = watched.League ?? "";
+        var snapshot = _leagues.GetValueOrDefault(leagueKey)?.Snapshot;
+        var leagueName = snapshot?.LeagueName ?? leagueKey;
+
         var resolvedPath = _soundResolver.Resolve(watched.SoundFile);
         var label = string.IsNullOrWhiteSpace(watched.Label) ? $"Team {watched.TeamId}" : watched.Label;
 
@@ -135,6 +201,8 @@ public sealed class DashboardState
         {
             return new WatchedTeamViewModel(
                 watched.TeamId,
+                leagueKey,
+                leagueName,
                 label,
                 EspnTeamName: null,
                 Points: null,
@@ -162,6 +230,8 @@ public sealed class DashboardState
 
         return new WatchedTeamViewModel(
             watched.TeamId,
+            leagueKey,
+            leagueName,
             label,
             EspnTeamName: team.Name,
             Points: team.Points,
@@ -180,4 +250,12 @@ public sealed class DashboardState
         player.Position,
         player.Points,
         player.Touchdowns.Total);
+
+    private sealed class LeagueRuntimeState
+    {
+        public LeagueSnapshot? Snapshot;
+        public DateTimeOffset? LastPollAt;
+        public string? LastError;
+        public bool DetectorSeeded;
+    }
 }

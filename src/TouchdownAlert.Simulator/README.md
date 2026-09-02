@@ -18,24 +18,25 @@ that autoplay does) shows up within 2 seconds.
 
 ## Pointing the App at it
 
-Run the App with `Espn:BaseUrl` set to the simulator and a short poll interval so alerts show up fast:
+Run the App with the `main` league's `BaseUrl` set to the simulator and a short poll interval so alerts
+show up fast:
 
 ```
-dotnet run --project src/TouchdownAlert.App -- --Espn:BaseUrl=http://localhost:5199 --Polling:IntervalSeconds=5
+dotnet run --project src/TouchdownAlert.App -- --Leagues:0:BaseUrl=http://localhost:5199 --Polling:IntervalSeconds=5
 ```
 
 or add an `appsettings.Local.json` next to the App's `appsettings.json`:
 
 ```json
 {
-  "Espn": { "BaseUrl": "http://localhost:5199" },
+  "Leagues": [ { "Key": "main", "Provider": "Espn", "LeagueId": "998946988", "BaseUrl": "http://localhost:5199" } ],
   "Polling": { "IntervalSeconds": 5 }
 }
 ```
 
 The simulator's league id (998946988) and team ids (1-10, names from `fixtures/league-2026-preseason.json`)
-match the App's default `Espn:LeagueId` and any `Alerts:WatchedTeams` config that references those team ids,
-so no other App-side config changes are needed.
+match the App's default `Leagues:0:LeagueId` and any `Alerts:WatchedTeams` config that references those team
+ids, so no other App-side config changes are needed.
 
 ## Demo walkthrough
 

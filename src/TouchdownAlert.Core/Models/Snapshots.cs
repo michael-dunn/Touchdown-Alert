@@ -84,9 +84,9 @@ public sealed record TeamSnapshot(
 
 public sealed record MatchupSnapshot(int HomeTeamId, double HomePoints, int AwayTeamId, double AwayPoints);
 
-/// <summary>Everything the app needs from one ESPN poll.</summary>
+/// <summary>Everything the app needs from one poll of one league.</summary>
 public sealed record LeagueSnapshot(
-    int LeagueId,
+    LeagueRef League,
     string LeagueName,
     int SeasonId,
     int ScoringPeriodId,

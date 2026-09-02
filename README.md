@@ -35,9 +35,9 @@ reference them by file name:
 
 ```json
 {
-  "Espn": {
-    "LeagueId": 12345678
-  },
+  "Leagues": [
+    { "Key": "main", "Provider": "Espn", "LeagueId": "12345678" }
+  ],
   "Sounds": {
     "Directory": "sounds",
     "Volume": 1.0,
@@ -45,10 +45,10 @@ reference them by file name:
   },
   "Alerts": {
     "WatchedTeams": [
-      { "TeamId": 1, "Label": "Michael", "SoundFile": "airhorn.mp3" },
-      { "TeamId": 4, "Label": "Alex", "SoundFile": "duck.mp3" },
-      { "TeamId": 7, "Label": "Priya", "SoundFile": "horn.mp3" },
-      { "TeamId": 10, "Label": "Sam", "SoundFile": "slide-whistle.mp3" }
+      { "TeamId": 1, "League": "main", "Label": "Michael", "SoundFile": "airhorn.mp3" },
+      { "TeamId": 4, "League": "main", "Label": "Alex", "SoundFile": "duck.mp3" },
+      { "TeamId": 7, "League": "main", "Label": "Priya", "SoundFile": "horn.mp3" },
+      { "TeamId": 10, "League": "main", "Label": "Sam", "SoundFile": "slide-whistle.mp3" }
     ]
   }
 }
@@ -57,10 +57,41 @@ reference them by file name:
 Clips are cut off after `MaxDurationSeconds` (default 5) so a long file can't drown out the
 next alert; set it to `0` to always play files in full.
 
-Up to four teams are supported. `TeamId` is the ESPN fantasy team id within the
-league (visible in the ESPN app/site URL or team settings). When one touchdown
+Up to four teams are supported. `TeamId` is the fantasy team id within its league
+(for ESPN, visible in the ESPN app/site URL or team settings). When one touchdown
 involves players started by more than one watched team, sounds play in the order
 the teams are listed.
+
+### Multiple leagues
+
+`Leagues` is an array, so a watched team can live in a different league than the others —
+useful if you're in more than one fantasy league, or once other providers are supported.
+Each league needs a unique `Key` (your own short name, e.g. `"main"`); each watched team's
+`League` references that key. If you only configure one league, `League` on a watched team
+can be omitted and defaults to it; with more than one league configured, every watched team
+must say which one it's in.
+
+```json
+{
+  "Leagues": [
+    { "Key": "main", "Provider": "Espn", "LeagueId": "12345678" },
+    { "Key": "work", "Provider": "Yahoo", "LeagueId": "nfl.l.987654" }
+  ],
+  "Alerts": {
+    "WatchedTeams": [
+      { "TeamId": 1, "League": "main", "Label": "Michael", "SoundFile": "airhorn.mp3" },
+      { "TeamId": 3, "League": "work", "Label": "Michael (work league)", "SoundFile": "airhorn.mp3" }
+    ]
+  }
+}
+```
+
+Yahoo support is coming soon — configuring `"Provider": "Yahoo"` today throws a clear
+`NotSupportedException` at startup rather than silently doing nothing.
+
+Each `LeagueOptions` entry also accepts `BaseUrl` (provider default when omitted; point it at
+the simulator for local testing), `SeasonId`, `ScoringPeriodId`, and `RequestTimeoutSeconds` —
+the same per-league settings that used to live under the single `Espn` section.
 
 If a configured `SoundFile` can't be found, the dashboard still shows the alert —
 it just flags the sound as missing instead of silently failing.
@@ -116,7 +147,7 @@ Manual equivalent:
 
 ```powershell
 dotnet run --project src/TouchdownAlert.Simulator
-dotnet run --project src/TouchdownAlert.App -- --Espn:BaseUrl=http://localhost:5199 --Polling:IntervalSeconds=5
+dotnet run --project src/TouchdownAlert.App -- --Leagues:0:BaseUrl=http://localhost:5199 --Polling:IntervalSeconds=5
 ```
 
 Full control API and details: `src/TouchdownAlert.Simulator/README.md`.
@@ -126,8 +157,10 @@ Full control API and details: `src/TouchdownAlert.Simulator/README.md`.
 - `GET /api/state` — current dashboard view model as JSON
 - `GET /api/health` — `{ ok, lastPollAt, lastError }`
 - `POST /api/poll` — trigger an immediate poll
-- `POST /api/detector/reset` — reset the touchdown detector (re-seeds on the next poll)
-- `POST /api/test/{teamId}` — fire a test alert for a watched team (400 if the team isn't watched)
+- `POST /api/detector/reset` — reset the touchdown detector for every league (re-seeds on the next poll)
+- `POST /api/detector/reset/{leagueKey}` — reset the touchdown detector for one league
+- `POST /api/test/{leagueKey}/{teamId}` — fire a test alert for a watched team in that league (400 if not watched)
+- `POST /api/test/{teamId}` — legacy form; works when the team id is unambiguous across all watched teams (400 if not watched, or if watched in more than one league)
 
 SignalR hub is at `/hub`; it pushes a `state` event after every poll and an
 `alert` event whenever an alert fires.

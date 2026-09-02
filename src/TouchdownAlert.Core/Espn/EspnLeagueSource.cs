@@ -1,7 +1,6 @@
 using System.Net.Http.Headers;
 using System.Text.Json;
 using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Options;
 using TouchdownAlert.Core.Abstractions;
 using TouchdownAlert.Core.Configuration;
 using TouchdownAlert.Core.Espn.Wire;
@@ -12,16 +11,18 @@ namespace TouchdownAlert.Core.Espn;
 /// <summary>Fetches league state from the real ESPN fantasy read API and maps it to a <see cref="LeagueSnapshot"/>.</summary>
 public sealed class EspnLeagueSource : ILeagueSource
 {
+    public const string DefaultBaseUrl = "https://lm-api-reads.fantasy.espn.com";
+
     private static readonly ProductInfoHeaderValue UserAgentProduct = new("Mozilla", "5.0");
 
     private readonly HttpClient _httpClient;
-    private readonly IOptions<EspnOptions> _options;
+    private readonly LeagueOptions _options;
     private readonly TimeProvider _timeProvider;
     private readonly ILogger<EspnLeagueSource> _logger;
 
     public EspnLeagueSource(
         HttpClient httpClient,
-        IOptions<EspnOptions> options,
+        LeagueOptions options,
         TimeProvider? timeProvider,
         ILogger<EspnLeagueSource> logger)
     {
@@ -33,13 +34,16 @@ public sealed class EspnLeagueSource : ILeagueSource
         _options = options;
         _timeProvider = timeProvider ?? TimeProvider.System;
         _logger = logger;
+
+        League = new LeagueRef(options.Key, options.Provider, options.LeagueId);
     }
+
+    public LeagueRef League { get; }
 
     public async Task<LeagueSnapshot> GetSnapshotAsync(CancellationToken cancellationToken)
     {
-        var options = _options.Value;
-        var seasonId = options.SeasonId ?? _timeProvider.GetUtcNow().Year;
-        var uri = BuildRequestUri(options, seasonId);
+        var seasonId = _options.SeasonId ?? _timeProvider.GetUtcNow().Year;
+        var uri = BuildRequestUri(_options, seasonId);
 
         using var request = new HttpRequestMessage(HttpMethod.Get, uri);
         request.Headers.UserAgent.Add(UserAgentProduct);
@@ -85,16 +89,16 @@ public sealed class EspnLeagueSource : ILeagueSource
                 throw new EspnApiException($"ESPN API response from {uri} deserialized to null.");
             }
 
-            return EspnSnapshotMapper.Map(parsed, _timeProvider.GetUtcNow());
+            return EspnSnapshotMapper.Map(parsed, League, _timeProvider.GetUtcNow());
         }
     }
 
     /// <summary>Builds the ESPN league request URI for the given options and season, appending scoringPeriodId only when set.</summary>
-    public static Uri BuildRequestUri(EspnOptions options, int seasonId)
+    public static Uri BuildRequestUri(LeagueOptions options, int seasonId)
     {
         ArgumentNullException.ThrowIfNull(options);
 
-        var baseUrl = options.BaseUrl.TrimEnd('/');
+        var baseUrl = (options.BaseUrl ?? DefaultBaseUrl).TrimEnd('/');
         var path = $"{baseUrl}/apis/v3/games/ffl/seasons/{seasonId}/segments/0/leagues/{options.LeagueId}" +
                    "?view=mBoxscore&view=mMatchupScore&view=mTeam&view=mSettings";
 

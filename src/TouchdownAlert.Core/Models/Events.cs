@@ -7,6 +7,7 @@ namespace TouchdownAlert.Core.Models;
 /// <param name="StartingTeamIds">Fantasy team ids that have this player in a STARTING slot right now.</param>
 /// <param name="BenchedTeamIds">Fantasy team ids that have this player on the bench/IR (informational only, never alerted).</param>
 public sealed record TouchdownEvent(
+    LeagueRef League,
     DateTimeOffset DetectedAt,
     int ScoringPeriodId,
     long PlayerId,
@@ -21,6 +22,7 @@ public sealed record TouchdownEvent(
 public sealed record Alert(
     DateTimeOffset At,
     int TeamId,
+    string LeagueKey,
     string TeamLabel,
     string SoundFile,
     TouchdownEvent Touchdown,

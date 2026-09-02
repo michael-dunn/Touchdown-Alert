@@ -60,15 +60,21 @@ public sealed class EndToEndTests : IAsyncLifetime
         _appFactory = new WebApplicationFactory<AppProgram>()
             .WithWebHostBuilder(builder =>
             {
-                builder.UseSetting("Espn:BaseUrl", _simulator.Server.BaseAddress.ToString());
+                builder.UseSetting("Leagues:0:Key", "main");
+                builder.UseSetting("Leagues:0:Provider", "Espn");
+                builder.UseSetting("Leagues:0:LeagueId", "998946988");
+                builder.UseSetting("Leagues:0:BaseUrl", _simulator.Server.BaseAddress.ToString());
                 builder.UseSetting("Polling:IntervalSeconds", "1");
                 builder.UseSetting("Sounds:Enabled", "false");
                 builder.UseSetting("Sounds:Directory", _soundsDir);
                 builder.UseSetting("Alerts:WatchedTeams:0:TeamId", "1");
+                builder.UseSetting("Alerts:WatchedTeams:0:League", "main");
                 builder.UseSetting("Alerts:WatchedTeams:0:SoundFile", "a.mp3");
                 builder.UseSetting("Alerts:WatchedTeams:1:TeamId", "3");
+                builder.UseSetting("Alerts:WatchedTeams:1:League", "main");
                 builder.UseSetting("Alerts:WatchedTeams:1:SoundFile", "b.mp3");
                 builder.UseSetting("Alerts:WatchedTeams:2:TeamId", "5");
+                builder.UseSetting("Alerts:WatchedTeams:2:League", "main");
                 builder.UseSetting("Alerts:WatchedTeams:2:SoundFile", "c.mp3");
 
                 builder.ConfigureServices(services =>
@@ -139,8 +145,8 @@ public sealed class EndToEndTests : IAsyncLifetime
             await Task.Delay(250);
         }
 
-        Assert.Contains(recentAlerts, a => a.GetProperty("teamId").GetInt32() == 1 && a.GetProperty("touchdownType").GetString() == "Passing");
-        Assert.Contains(recentAlerts, a => a.GetProperty("teamId").GetInt32() == 3 && a.GetProperty("touchdownType").GetString() == "Receiving");
+        Assert.Contains(recentAlerts, a => a.GetProperty("teamId").GetInt32() == 1 && a.GetProperty("touchdownType").GetString() == "Passing" && a.GetProperty("leagueKey").GetString() == "main");
+        Assert.Contains(recentAlerts, a => a.GetProperty("teamId").GetInt32() == 3 && a.GetProperty("touchdownType").GetString() == "Receiving" && a.GetProperty("leagueKey").GetString() == "main");
         Assert.DoesNotContain(recentAlerts, a => a.GetProperty("teamId").GetInt32() == 5);
 
         // Sounds enqueue (as resolved absolute paths) in configured watched-team order: team 1 before team 3.
@@ -154,18 +160,114 @@ public sealed class EndToEndTests : IAsyncLifetime
     [Fact]
     public async Task Test_endpoint_plays_configured_sound_for_watched_team_and_rejects_others()
     {
-        var ok = await _appClient.PostAsync("/api/test/3", content: null);
+        var ok = await _appClient.PostAsync("/api/test/main/3", content: null);
         ok.EnsureSuccessStatusCode();
 
-        var bad = await _appClient.PostAsync("/api/test/9", content: null);
+        var bad = await _appClient.PostAsync("/api/test/main/9", content: null);
         Assert.Equal(System.Net.HttpStatusCode.BadRequest, bad.StatusCode);
+
+        // Legacy, non-league-qualified endpoint still works when the team id is unambiguous.
+        var legacyOk = await _appClient.PostAsync("/api/test/3", content: null);
+        legacyOk.EnsureSuccessStatusCode();
 
         var names = _soundPlayer.Enqueued.Select(Path.GetFileName).ToList();
         Assert.Contains("b.mp3", names);
 
         var state = await _appClient.GetFromJsonAsync<JsonElement>("/api/state");
         var alerts = state.GetProperty("recentAlerts").EnumerateArray().ToList();
-        Assert.Contains(alerts, a => a.GetProperty("teamId").GetInt32() == 3 && a.GetProperty("isTest").GetBoolean());
+        Assert.Contains(alerts, a => a.GetProperty("teamId").GetInt32() == 3 && a.GetProperty("isTest").GetBoolean() && a.GetProperty("leagueKey").GetString() == "main");
+    }
+
+    [Fact]
+    public async Task TwoLeagues_partition_alerts_by_league_even_for_the_same_team_id()
+    {
+        // Two leagues, both pointed at the same simulator/league id, so the same underlying player/team ids
+        // exist in both. Team 3 is watched only in "other". A touchdown for Ja'Marr Chase (a starter on
+        // team 3) must alert exactly once, in "other", and never in "main".
+        var twoLeagueSoundsDir = Path.Combine(Path.GetTempPath(), "TouchdownAlert.E2E", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(twoLeagueSoundsDir);
+        File.WriteAllBytes(Path.Combine(twoLeagueSoundsDir, "other.mp3"), Array.Empty<byte>());
+
+        var twoLeagueSoundPlayer = new RecordingSoundPlayer();
+
+        await using var twoLeagueFactory = new WebApplicationFactory<AppProgram>()
+            .WithWebHostBuilder(builder =>
+            {
+                builder.UseSetting("Leagues:0:Key", "main");
+                builder.UseSetting("Leagues:0:Provider", "Espn");
+                builder.UseSetting("Leagues:0:LeagueId", "998946988");
+                builder.UseSetting("Leagues:0:BaseUrl", _simulator.Server.BaseAddress.ToString());
+                builder.UseSetting("Leagues:1:Key", "other");
+                builder.UseSetting("Leagues:1:Provider", "Espn");
+                builder.UseSetting("Leagues:1:LeagueId", "998946988");
+                builder.UseSetting("Leagues:1:BaseUrl", _simulator.Server.BaseAddress.ToString());
+                builder.UseSetting("Polling:IntervalSeconds", "1");
+                builder.UseSetting("Sounds:Enabled", "false");
+                builder.UseSetting("Sounds:Directory", twoLeagueSoundsDir);
+                builder.UseSetting("Alerts:WatchedTeams:0:TeamId", "3");
+                builder.UseSetting("Alerts:WatchedTeams:0:League", "other");
+                builder.UseSetting("Alerts:WatchedTeams:0:SoundFile", "other.mp3");
+                // Blank out the App's own appsettings.json entries (indices 1-3) so they can't leak in
+                // and double-alert: overriding index 0 alone doesn't remove the rest of that array.
+                builder.UseSetting("Alerts:WatchedTeams:1:TeamId", "-1");
+                builder.UseSetting("Alerts:WatchedTeams:1:League", "main");
+                builder.UseSetting("Alerts:WatchedTeams:1:SoundFile", "");
+                builder.UseSetting("Alerts:WatchedTeams:2:TeamId", "-1");
+                builder.UseSetting("Alerts:WatchedTeams:2:League", "main");
+                builder.UseSetting("Alerts:WatchedTeams:2:SoundFile", "");
+                builder.UseSetting("Alerts:WatchedTeams:3:TeamId", "-1");
+                builder.UseSetting("Alerts:WatchedTeams:3:League", "main");
+                builder.UseSetting("Alerts:WatchedTeams:3:SoundFile", "");
+
+                builder.ConfigureServices(services =>
+                {
+                    var handler = _simulator.Server.CreateHandler();
+                    services.ConfigureHttpClientDefaults(b => b.ConfigurePrimaryHttpMessageHandler(() => handler));
+
+                    services.RemoveAll<ISoundPlayer>();
+                    services.AddSingleton<ISoundPlayer>(twoLeagueSoundPlayer);
+                });
+            });
+
+        var client = twoLeagueFactory.CreateClient();
+
+        // Wait for both leagues to seed.
+        var seedDeadline = DateTime.UtcNow.AddSeconds(15);
+        while (DateTime.UtcNow < seedDeadline)
+        {
+            var s = await client.GetFromJsonAsync<JsonElement>("/api/state");
+            if (s.TryGetProperty("detectorSeeded", out var seeded) && seeded.GetBoolean())
+            {
+                break;
+            }
+
+            await Task.Delay(250);
+        }
+
+        (await _simulator.Client.PostAsJsonAsync("/sim/touchdown", new { playerId = 4362628, type = "Receiving", count = 1 })).EnsureSuccessStatusCode();
+
+        (await client.PostAsync("/api/poll", content: null)).EnsureSuccessStatusCode();
+
+        List<JsonElement> recentAlerts = new();
+        var deadline = DateTime.UtcNow.AddSeconds(10);
+        while (DateTime.UtcNow < deadline)
+        {
+            var state = await client.GetFromJsonAsync<JsonElement>("/api/state");
+            recentAlerts = state.GetProperty("recentAlerts").EnumerateArray().ToList();
+            if (recentAlerts.Count >= 1)
+            {
+                break;
+            }
+
+            await Task.Delay(250);
+        }
+
+        Assert.Single(recentAlerts);
+        Assert.Equal("other", recentAlerts[0].GetProperty("leagueKey").GetString());
+        Assert.Equal(3, recentAlerts[0].GetProperty("teamId").GetInt32());
+
+        client.Dispose();
+        try { Directory.Delete(twoLeagueSoundsDir, recursive: true); } catch { /* best effort */ }
     }
 
     private async Task<long> FindTeam1StarterQbIdAsync()

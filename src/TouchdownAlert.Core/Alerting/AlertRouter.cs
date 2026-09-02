@@ -9,18 +9,34 @@ namespace TouchdownAlert.Core.Alerting;
 public sealed class AlertRouter : IAlertRouter
 {
     private readonly IOptionsMonitor<AlertOptions> _options;
+    private readonly IOptionsMonitor<LeaguesOptions> _leaguesOptions;
     private readonly ISoundFileResolver _soundFileResolver;
 
-    public AlertRouter(IOptionsMonitor<AlertOptions> options, ISoundFileResolver soundFileResolver)
+    public AlertRouter(IOptionsMonitor<AlertOptions> options, IOptionsMonitor<LeaguesOptions> leaguesOptions, ISoundFileResolver soundFileResolver)
     {
         ArgumentNullException.ThrowIfNull(options);
+        ArgumentNullException.ThrowIfNull(leaguesOptions);
         ArgumentNullException.ThrowIfNull(soundFileResolver);
         _options = options;
+        _leaguesOptions = leaguesOptions;
         _soundFileResolver = soundFileResolver;
     }
 
     /// <summary>The resolver used to locate configured sound files (exposed for callers that need the sounds directory).</summary>
     public ISoundFileResolver SoundFileResolver => _soundFileResolver;
+
+    /// <summary>The resolved watched-team list: each entry's League is filled in with the default league key
+    /// where it was blank in configuration.</summary>
+    public IReadOnlyList<WatchedTeamOptions> WatchedTeams
+    {
+        get
+        {
+            var watchedTeams = _options.CurrentValue.WatchedTeams;
+            var leagues = _leaguesOptions.CurrentValue.Items;
+            LeagueConfigurationValidator.ValidateAndResolve(leagues, watchedTeams);
+            return watchedTeams;
+        }
+    }
 
     public IReadOnlyList<Alert> Route(TouchdownEvent touchdown, LeagueSnapshot snapshot)
     {
@@ -29,8 +45,13 @@ public sealed class AlertRouter : IAlertRouter
 
         var alerts = new List<Alert>();
 
-        foreach (var watched in _options.CurrentValue.WatchedTeams)
+        foreach (var watched in WatchedTeams)
         {
+            if (!string.Equals(watched.League, touchdown.League.Key, StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
             if (!touchdown.StartingTeamIds.Contains(watched.TeamId))
             {
                 continue;
@@ -44,6 +65,7 @@ public sealed class AlertRouter : IAlertRouter
             alerts.Add(new Alert(
                 At: touchdown.DetectedAt,
                 TeamId: watched.TeamId,
+                LeagueKey: touchdown.League.Key,
                 TeamLabel: ResolveLabel(watched, snapshot),
                 SoundFile: watched.SoundFile,
                 Touchdown: touchdown));
@@ -52,13 +74,19 @@ public sealed class AlertRouter : IAlertRouter
         return alerts;
     }
 
-    public Alert CreateTestAlert(int teamId, LeagueSnapshot? snapshot)
+    public Alert CreateTestAlert(string leagueKey, int teamId, LeagueSnapshot? snapshot)
     {
-        var watched = _options.CurrentValue.WatchedTeams.FirstOrDefault(w => w.TeamId == teamId)
-            ?? throw new ArgumentException($"Team {teamId} is not watched.", nameof(teamId));
+        ArgumentNullException.ThrowIfNull(leagueKey);
+
+        var watched = WatchedTeams.FirstOrDefault(w => w.TeamId == teamId && string.Equals(w.League, leagueKey, StringComparison.OrdinalIgnoreCase))
+            ?? throw new ArgumentException($"Team {teamId} is not watched in league \"{leagueKey}\".", nameof(teamId));
+
+        var league = _leaguesOptions.CurrentValue.Items.FirstOrDefault(l => string.Equals(l.Key, leagueKey, StringComparison.OrdinalIgnoreCase));
+        var leagueRef = new LeagueRef(leagueKey, league?.Provider ?? LeagueProvider.Espn, league?.LeagueId ?? "");
 
         var now = DateTimeOffset.UtcNow;
         var touchdown = new TouchdownEvent(
+            League: leagueRef,
             DetectedAt: now,
             ScoringPeriodId: snapshot?.ScoringPeriodId ?? 0,
             PlayerId: -1,
@@ -72,6 +100,7 @@ public sealed class AlertRouter : IAlertRouter
         return new Alert(
             At: now,
             TeamId: teamId,
+            LeagueKey: leagueKey,
             TeamLabel: ResolveLabel(watched, snapshot),
             SoundFile: watched.SoundFile,
             Touchdown: touchdown,

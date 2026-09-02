@@ -1,37 +1,56 @@
+using TouchdownAlert.Core.Models;
+
 namespace TouchdownAlert.Core.Configuration;
 
-public sealed class EspnOptions
+public sealed class LeagueOptions
 {
-    public const string SectionName = "Espn";
+    /// <summary>Short user-chosen id, required, unique, referenced by WatchedTeams:*:League.</summary>
+    public string Key { get; set; } = "";
 
-    /// <summary>Base URL of the ESPN fantasy read API. Point at the simulator for integration testing.</summary>
-    public string BaseUrl { get; set; } = "https://lm-api-reads.fantasy.espn.com";
+    public LeagueProvider Provider { get; set; } = LeagueProvider.Espn;
 
-    public int LeagueId { get; set; } = 998946988;
+    /// <summary>ESPN numeric league id as string; Yahoo league key later.</summary>
+    public string LeagueId { get; set; } = "";
+
+    /// <summary>Base URL of the provider's read API. Null = provider default (ESPN: https://lm-api-reads.fantasy.espn.com).</summary>
+    public string? BaseUrl { get; set; }
 
     /// <summary>Season year. Null = current year (auto).</summary>
     public int? SeasonId { get; set; }
 
-    /// <summary>Force a scoring period (NFL week). Null = let ESPN report the current one (auto).</summary>
+    /// <summary>Force a scoring period (NFL week). Null = let the provider report the current one (auto).</summary>
     public int? ScoringPeriodId { get; set; }
 
     public int RequestTimeoutSeconds { get; set; } = 20;
+}
+
+public sealed class LeaguesOptions
+{
+    public const string SectionName = "Leagues";
+
+    public List<LeagueOptions> Items { get; set; } = new();
 }
 
 public sealed class PollingOptions
 {
     public const string SectionName = "Polling";
 
-    /// <summary>Seconds between ESPN polls.</summary>
+    /// <summary>Seconds between league polls.</summary>
     public int IntervalSeconds { get; set; } = 30;
 }
 
 public sealed class WatchedTeamOptions
 {
-    /// <summary>ESPN fantasy team id within the league.</summary>
+    /// <summary>Fantasy team id within the league.</summary>
     public int TeamId { get; set; }
 
-    /// <summary>Friendly name shown on the dashboard. Defaults to the ESPN team name when blank.</summary>
+    /// <summary>
+    /// The league Key this team lives in. If null/blank and exactly one league is configured, defaults to
+    /// that league. Blank with multiple leagues configured fails fast at startup.
+    /// </summary>
+    public string? League { get; set; }
+
+    /// <summary>Friendly name shown on the dashboard. Defaults to the provider team name when blank.</summary>
     public string? Label { get; set; }
 
     /// <summary>Sound file name (relative to Sounds:Directory) or absolute path. mp3 or wav.</summary>

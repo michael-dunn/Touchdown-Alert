@@ -57,6 +57,7 @@ public sealed class AlertDispatcher
         var entry = new Contracts.AlertLogEntryViewModel(
             alert.At,
             alert.TeamId,
+            alert.LeagueKey,
             alert.TeamLabel,
             alert.Touchdown.PlayerName,
             alert.Touchdown.Type.ToString(),

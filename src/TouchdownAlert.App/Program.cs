@@ -1,10 +1,7 @@
-using Microsoft.Extensions.Options;
 using TouchdownAlert.App.Audio;
-using TouchdownAlert.App.Contracts;
 using TouchdownAlert.App.Hubs;
 using TouchdownAlert.App.Services;
 using TouchdownAlert.Core.Abstractions;
-using TouchdownAlert.Core.Configuration;
 using TouchdownAlert.Core.DependencyInjection;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -66,15 +63,46 @@ app.MapPost("/api/detector/reset", (ITouchdownDetector detector, DashboardState 
     return Results.Ok();
 });
 
-app.MapPost("/api/test/{teamId:int}", async (int teamId, IAlertRouter router, IOptionsMonitor<AlertOptions> alertOptions, DashboardState state, AlertDispatcher dispatcher) =>
+app.MapPost("/api/detector/reset/{leagueKey}", (string leagueKey, ITouchdownDetector detector, DashboardState state) =>
 {
-    var isWatched = alertOptions.CurrentValue.WatchedTeams.Any(w => w.TeamId == teamId);
+    detector.Reset(leagueKey);
+    state.ResetDetectorSeeded(leagueKey);
+    return Results.Ok();
+});
+
+app.MapPost("/api/test/{leagueKey}/{teamId:int}", async (string leagueKey, int teamId, IAlertRouter router, DashboardState state, AlertDispatcher dispatcher) =>
+{
+    var isWatched = router.WatchedTeams.Any(w => w.TeamId == teamId && string.Equals(w.League, leagueKey, StringComparison.OrdinalIgnoreCase));
     if (!isWatched)
+    {
+        return Results.BadRequest(new { error = $"Team {teamId} is not a watched team in league \"{leagueKey}\"" });
+    }
+
+    var alert = router.CreateTestAlert(leagueKey, teamId, state.GetSnapshot(leagueKey));
+    await dispatcher.DispatchAsync(alert);
+    return Results.Ok(alert);
+});
+
+// Legacy endpoint kept for back compat: works when the team id is unambiguous across watched teams.
+app.MapPost("/api/test/{teamId:int}", async (int teamId, IAlertRouter router, DashboardState state, AlertDispatcher dispatcher) =>
+{
+    var matches = router.WatchedTeams.Where(w => w.TeamId == teamId).ToList();
+    if (matches.Count == 0)
     {
         return Results.BadRequest(new { error = $"Team {teamId} is not a watched team" });
     }
 
-    var alert = router.CreateTestAlert(teamId, state.LastSnapshot);
+    if (matches.Count > 1)
+    {
+        return Results.BadRequest(new
+        {
+            error = $"Team {teamId} is watched in multiple leagues ({string.Join(", ", matches.Select(m => m.League))}); " +
+                     $"use POST /api/test/{{leagueKey}}/{teamId} instead",
+        });
+    }
+
+    var leagueKey = matches[0].League!;
+    var alert = router.CreateTestAlert(leagueKey, teamId, state.GetSnapshot(leagueKey));
     await dispatcher.DispatchAsync(alert);
     return Results.Ok(alert);
 });

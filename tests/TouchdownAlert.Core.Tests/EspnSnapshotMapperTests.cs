@@ -5,19 +5,21 @@ namespace TouchdownAlert.Core.Tests;
 
 public class EspnSnapshotMapperTests
 {
+    private static readonly LeagueRef TestLeague = new("main", LeagueProvider.Espn, "998946988");
+
     [Fact]
     public void Map_PreseasonFixture_DoesNotThrowAndHasTenTeamsWithEmptyRosters()
     {
         var response = TestFixtures.LoadResponse("league-2026-preseason.json");
 
-        var snapshot = EspnSnapshotMapper.Map(response, DateTimeOffset.UtcNow);
+        var snapshot = EspnSnapshotMapper.Map(response, TestLeague, DateTimeOffset.UtcNow);
 
         Assert.Equal(10, snapshot.Teams.Count);
         Assert.All(snapshot.Teams, t => Assert.Empty(t.Roster));
         // scoringPeriodId (0) and status.latestScoringPeriod (0) both fall back to currentMatchupPeriod (1).
         Assert.Equal(1, snapshot.ScoringPeriodId);
         Assert.Equal(1, snapshot.MatchupPeriodId);
-        Assert.Equal(998946988, snapshot.LeagueId);
+        Assert.Equal(TestLeague, snapshot.League);
         Assert.Equal(2026, snapshot.SeasonId);
     }
 
@@ -26,7 +28,7 @@ public class EspnSnapshotMapperTests
     {
         var response = TestFixtures.LoadResponse("league-2026-preseason.json");
 
-        var snapshot = EspnSnapshotMapper.Map(response, DateTimeOffset.UtcNow);
+        var snapshot = EspnSnapshotMapper.Map(response, TestLeague, DateTimeOffset.UtcNow);
 
         var team1 = snapshot.FindTeam(1);
         Assert.NotNull(team1);
@@ -39,7 +41,7 @@ public class EspnSnapshotMapperTests
     {
         var response = TestFixtures.LoadResponse("league-week1-live-sample.json");
 
-        var snapshot = EspnSnapshotMapper.Map(response, DateTimeOffset.UtcNow);
+        var snapshot = EspnSnapshotMapper.Map(response, TestLeague, DateTimeOffset.UtcNow);
 
         var team1 = snapshot.FindTeam(1)!;
         Assert.Equal(13, team1.Roster.Count);
@@ -61,7 +63,7 @@ public class EspnSnapshotMapperTests
     {
         var response = TestFixtures.LoadResponse("league-week1-live-sample.json");
 
-        var snapshot = EspnSnapshotMapper.Map(response, DateTimeOffset.UtcNow);
+        var snapshot = EspnSnapshotMapper.Map(response, TestLeague, DateTimeOffset.UtcNow);
 
         var joshAllen = snapshot.FindTeam(1)!.Roster.Single(p => p.PlayerId == 3918298);
         Assert.Equal(1, joshAllen.Touchdowns.Passing);
@@ -75,7 +77,7 @@ public class EspnSnapshotMapperTests
     {
         var response = TestFixtures.LoadResponse("league-week1-live-sample-after-td.json");
 
-        var snapshot = EspnSnapshotMapper.Map(response, DateTimeOffset.UtcNow);
+        var snapshot = EspnSnapshotMapper.Map(response, TestLeague, DateTimeOffset.UtcNow);
 
         var joshAllen = snapshot.FindTeam(1)!.Roster.Single(p => p.PlayerId == 3918298);
         Assert.Equal(2, joshAllen.Touchdowns.Passing);
@@ -89,7 +91,7 @@ public class EspnSnapshotMapperTests
     {
         var response = TestFixtures.LoadResponse("league-week1-live-sample.json");
 
-        var snapshot = EspnSnapshotMapper.Map(response, DateTimeOffset.UtcNow);
+        var snapshot = EspnSnapshotMapper.Map(response, TestLeague, DateTimeOffset.UtcNow);
 
         Assert.Equal(5, snapshot.Matchups.Count);
         var teamIds = snapshot.Matchups.SelectMany(m => new[] { m.HomeTeamId, m.AwayTeamId }).OrderBy(x => x).ToList();
@@ -101,7 +103,7 @@ public class EspnSnapshotMapperTests
     {
         var response = TestFixtures.LoadResponse("league-week1-live-sample.json");
 
-        var snapshot = EspnSnapshotMapper.Map(response, DateTimeOffset.UtcNow);
+        var snapshot = EspnSnapshotMapper.Map(response, TestLeague, DateTimeOffset.UtcNow);
 
         Assert.All(snapshot.Teams, t => Assert.True(t.Points > 0));
     }

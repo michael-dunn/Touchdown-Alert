@@ -7,16 +7,18 @@ using TouchdownAlert.Core.Configuration;
 namespace TouchdownAlert.App.Services;
 
 /// <summary>
-/// Polls ESPN on an interval (configurable live via IOptionsMonitor), runs the touchdown
-/// detector, routes any events through IAlertRouter/AlertDispatcher, updates DashboardState,
-/// and broadcasts the refreshed view model over SignalR. Backs off exponentially (capped at
-/// 5 minutes) on failure and resets to the configured interval on the next success.
+/// Polls every configured league concurrently on an interval (configurable live via IOptionsMonitor), runs
+/// the touchdown detector, routes any events through IAlertRouter/AlertDispatcher, updates DashboardState,
+/// and broadcasts the refreshed view model over SignalR. A failure in one league's poll is recorded against
+/// that league only and never stops the others. Backoff is global and applies only when every configured
+/// league fails in the same cycle: it doubles (capped at 5 minutes) and resets to the configured interval
+/// as soon as at least one league polls successfully.
 /// </summary>
 public sealed class PollingService : BackgroundService
 {
     private static readonly TimeSpan MaxBackoff = TimeSpan.FromMinutes(5);
 
-    private readonly ILeagueSource _leagueSource;
+    private readonly IEnumerable<ILeagueSource> _leagueSources;
     private readonly ITouchdownDetector _detector;
     private readonly IAlertRouter _alertRouter;
     private readonly AlertDispatcher _dispatcher;
@@ -30,7 +32,7 @@ public sealed class PollingService : BackgroundService
     private TimeSpan? _currentBackoff;
 
     public PollingService(
-        ILeagueSource leagueSource,
+        IEnumerable<ILeagueSource> leagueSources,
         ITouchdownDetector detector,
         IAlertRouter alertRouter,
         AlertDispatcher dispatcher,
@@ -40,7 +42,7 @@ public sealed class PollingService : BackgroundService
         TimeProvider timeProvider,
         ILogger<PollingService> logger)
     {
-        _leagueSource = leagueSource;
+        _leagueSources = leagueSources;
         _detector = detector;
         _alertRouter = alertRouter;
         _dispatcher = dispatcher;
@@ -75,8 +77,7 @@ public sealed class PollingService : BackgroundService
             }
             catch (Exception ex)
             {
-                _logger.LogWarning(ex, "Poll failed: {Message}", ex.Message);
-                _state.RecordError(ex.Message);
+                _logger.LogWarning(ex, "Poll failed for every configured league: {Message}", ex.Message);
                 var baseInterval = ConfiguredInterval();
                 _currentBackoff = _currentBackoff is null
                     ? baseInterval
@@ -84,6 +85,7 @@ public sealed class PollingService : BackgroundService
                 nextDelay = _currentBackoff.Value;
             }
 
+            _state.RecordPollCycle();
             _state.SetNextPollAt(_timeProvider.GetUtcNow() + nextDelay);
             await BroadcastStateAsync();
             await WaitAsync(nextDelay, stoppingToken);
@@ -95,25 +97,57 @@ public sealed class PollingService : BackgroundService
 
     private static TimeSpan TimeSpanMin(TimeSpan a, TimeSpan b) => a < b ? a : b;
 
+    /// <summary>
+    /// Polls every configured league concurrently. Per-league failures are recorded on <see cref="DashboardState"/>
+    /// and do not stop other leagues; this method only throws when every league failed, so the caller's
+    /// exponential backoff kicks in solely for a total outage.
+    /// </summary>
     private async Task PollOnceAsync(CancellationToken cancellationToken)
     {
-        var snapshot = await _leagueSource.GetSnapshotAsync(cancellationToken);
-        var events = _detector.Update(snapshot);
+        var tasks = _leagueSources.Select(source => PollLeagueAsync(source, cancellationToken)).ToList();
+        var results = await Task.WhenAll(tasks);
 
-        _state.RecordSnapshot(snapshot, _timeProvider.GetUtcNow(), _detector.IsSeeded);
-
-        foreach (var touchdown in events)
+        if (results.Length > 0 && results.All(r => !r.Success))
         {
-            var alerts = _alertRouter.Route(touchdown, snapshot);
-            foreach (var alert in alerts)
-            {
-                await _dispatcher.DispatchAsync(alert);
-            }
+            var firstError = results.Select(r => r.Error).FirstOrDefault(e => e is not null) ?? "All league polls failed.";
+            throw new InvalidOperationException(firstError);
         }
+    }
 
-        _logger.LogInformation(
-            "Poll ok: week {Week}, {TeamCount} teams, {EventCount} touchdown event(s)",
-            snapshot.ScoringPeriodId, snapshot.Teams.Count, events.Count);
+    private async Task<(bool Success, string? Error)> PollLeagueAsync(ILeagueSource source, CancellationToken cancellationToken)
+    {
+        try
+        {
+            var snapshot = await source.GetSnapshotAsync(cancellationToken);
+            var events = _detector.Update(snapshot);
+
+            _state.RecordSnapshot(snapshot, _timeProvider.GetUtcNow(), _detector.IsSeeded(source.League.Key));
+
+            foreach (var touchdown in events)
+            {
+                var alerts = _alertRouter.Route(touchdown, snapshot);
+                foreach (var alert in alerts)
+                {
+                    await _dispatcher.DispatchAsync(alert);
+                }
+            }
+
+            _logger.LogInformation(
+                "Poll ok [{League}]: week {Week}, {TeamCount} teams, {EventCount} touchdown event(s)",
+                source.League.Key, snapshot.ScoringPeriodId, snapshot.Teams.Count, events.Count);
+
+            return (true, null);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Poll failed for league {League}: {Message}", source.League.Key, ex.Message);
+            _state.RecordError(source.League.Key, ex.Message);
+            return (false, ex.Message);
+        }
     }
 
     private async Task WaitAsync(TimeSpan delay, CancellationToken stoppingToken)

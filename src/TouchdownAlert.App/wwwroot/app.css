@@ -94,6 +94,67 @@ button {
 button:hover { border-color: var(--accent); }
 button:active { transform: translateY(1px); }
 
+.league-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+}
+
+.league-chip {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--muted);
+  border-radius: 6px;
+  padding: 0.35rem 0.6rem;
+  font-size: 0.78rem;
+  min-width: 8rem;
+}
+
+.league-chip.good { border-left-color: var(--accent-2); }
+.league-chip.bad { border-left-color: var(--danger); }
+.league-chip.pending { border-left-color: var(--accent); }
+
+.league-chip-name {
+  font-weight: 600;
+  color: var(--text);
+}
+
+.league-chip-meta {
+  color: var(--muted);
+  font-size: 0.72rem;
+}
+
+.league-chip-error {
+  color: var(--danger);
+  font-size: 0.7rem;
+}
+
+.league-badge {
+  display: inline-block;
+  color: var(--muted);
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 0.05rem 0.4rem;
+  font-size: 0.68rem;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  margin-bottom: 0.4rem;
+}
+
+.alert-league {
+  color: var(--muted);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 0.05rem 0.35rem;
+  font-size: 0.7rem;
+  text-transform: uppercase;
+}
+
 .error-banner {
   margin-top: 0.5rem;
   background: #3a1414;

@@ -5,25 +5,56 @@ namespace TouchdownAlert.Core.Detection;
 
 /// <summary>
 /// Stateful diff-based touchdown detector. Feed it every <see cref="LeagueSnapshot"/> in polling order.
-/// Thread-safe: <see cref="Update"/> and <see cref="Reset"/> are guarded by an internal lock.
+/// State is partitioned per league (keyed by <see cref="LeagueRef.Key"/>) so multiple leagues never interfere
+/// with each other, even if the same player id appears in more than one. Thread-safe: <see cref="Update"/> and
+/// <see cref="Reset()"/> are guarded by an internal lock.
 /// </summary>
 public sealed class TouchdownDetector : ITouchdownDetector
 {
     private readonly TimeProvider _timeProvider;
     private readonly object _lock = new();
-    private readonly Dictionary<long, TouchdownCounts> _lastCounts = new();
+    private readonly Dictionary<string, LeagueState> _leagues = new();
 
     public TouchdownDetector(TimeProvider? timeProvider = null)
     {
         _timeProvider = timeProvider ?? TimeProvider.System;
     }
 
-    public bool IsSeeded { get; private set; }
-
-    public int? SeededScoringPeriodId { get; private set; }
-
     /// <summary>Current time per the injected <see cref="TimeProvider"/>. Exposed for diagnostics/testing.</summary>
     public DateTimeOffset Now => _timeProvider.GetUtcNow();
+
+    public bool IsSeeded(string leagueKey)
+    {
+        lock (_lock)
+        {
+            return _leagues.TryGetValue(leagueKey, out var state) && state.IsSeeded;
+        }
+    }
+
+    public bool AllSeeded(IEnumerable<string> leagueKeys)
+    {
+        ArgumentNullException.ThrowIfNull(leagueKeys);
+        lock (_lock)
+        {
+            foreach (var key in leagueKeys)
+            {
+                if (!_leagues.TryGetValue(key, out var state) || !state.IsSeeded)
+                {
+                    return false;
+                }
+            }
+
+            return true;
+        }
+    }
+
+    public int? SeededScoringPeriodId(string leagueKey)
+    {
+        lock (_lock)
+        {
+            return _leagues.TryGetValue(leagueKey, out var state) ? state.SeededScoringPeriodId : null;
+        }
+    }
 
     public IReadOnlyList<TouchdownEvent> Update(LeagueSnapshot snapshot)
     {
@@ -31,11 +62,18 @@ public sealed class TouchdownDetector : ITouchdownDetector
 
         lock (_lock)
         {
+            var leagueKey = snapshot.League.Key;
+            if (!_leagues.TryGetValue(leagueKey, out var state))
+            {
+                state = new LeagueState();
+                _leagues[leagueKey] = state;
+            }
+
             var players = CollectPlayers(snapshot);
 
-            if (!IsSeeded || SeededScoringPeriodId != snapshot.ScoringPeriodId)
+            if (!state.IsSeeded || state.SeededScoringPeriodId != snapshot.ScoringPeriodId)
             {
-                Seed(players, snapshot.ScoringPeriodId);
+                Seed(state, players, snapshot.ScoringPeriodId);
                 return Array.Empty<TouchdownEvent>();
             }
 
@@ -45,10 +83,10 @@ public sealed class TouchdownDetector : ITouchdownDetector
             {
                 var newCounts = player.Touchdowns;
 
-                if (!_lastCounts.TryGetValue(playerId, out var oldCounts))
+                if (!state.LastCounts.TryGetValue(playerId, out var oldCounts))
                 {
                     // Newly appeared mid-period (e.g. waiver pickup): seed silently, no event.
-                    _lastCounts[playerId] = newCounts;
+                    state.LastCounts[playerId] = newCounts;
                     continue;
                 }
 
@@ -60,6 +98,7 @@ public sealed class TouchdownDetector : ITouchdownDetector
                     if (newValue > oldValue)
                     {
                         events.Add(new TouchdownEvent(
+                            League: snapshot.League,
                             DetectedAt: snapshot.FetchedAt,
                             ScoringPeriodId: snapshot.ScoringPeriodId,
                             PlayerId: playerId,
@@ -72,7 +111,7 @@ public sealed class TouchdownDetector : ITouchdownDetector
                     }
                 }
 
-                _lastCounts[playerId] = newCounts;
+                state.LastCounts[playerId] = newCounts;
             }
 
             return events;
@@ -83,22 +122,31 @@ public sealed class TouchdownDetector : ITouchdownDetector
     {
         lock (_lock)
         {
-            _lastCounts.Clear();
-            IsSeeded = false;
-            SeededScoringPeriodId = null;
+            _leagues.Clear();
         }
     }
 
-    private void Seed(IReadOnlyDictionary<long, (RosteredPlayer Player, IReadOnlyList<int> Starting, IReadOnlyList<int> Benched)> players, int scoringPeriodId)
+    public void Reset(string leagueKey)
     {
-        _lastCounts.Clear();
+        lock (_lock)
+        {
+            _leagues.Remove(leagueKey);
+        }
+    }
+
+    private static void Seed(
+        LeagueState state,
+        IReadOnlyDictionary<long, (RosteredPlayer Player, IReadOnlyList<int> Starting, IReadOnlyList<int> Benched)> players,
+        int scoringPeriodId)
+    {
+        state.LastCounts.Clear();
         foreach (var (playerId, entry) in players)
         {
-            _lastCounts[playerId] = entry.Player.Touchdowns;
+            state.LastCounts[playerId] = entry.Player.Touchdowns;
         }
 
-        IsSeeded = true;
-        SeededScoringPeriodId = scoringPeriodId;
+        state.IsSeeded = true;
+        state.SeededScoringPeriodId = scoringPeriodId;
     }
 
     /// <summary>
@@ -155,4 +203,11 @@ public sealed class TouchdownDetector : ITouchdownDetector
         TouchdownType.InterceptionReturn,
         TouchdownType.BlockedKickReturn,
     ];
+
+    private sealed class LeagueState
+    {
+        public bool IsSeeded { get; set; }
+        public int? SeededScoringPeriodId { get; set; }
+        public Dictionary<long, TouchdownCounts> LastCounts { get; } = new();
+    }
 }

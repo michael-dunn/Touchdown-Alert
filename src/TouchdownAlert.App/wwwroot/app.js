@@ -7,6 +7,7 @@
     connText: document.getElementById("conn-text"),
     weekLabel: document.getElementById("week-label"),
     pollInfo: document.getElementById("poll-info"),
+    leagueChips: document.getElementById("league-chips"),
     errorBanner: document.getElementById("error-banner"),
     teams: document.getElementById("teams"),
     alertLog: document.getElementById("alert-log"),
@@ -56,6 +57,31 @@
     els.leagueName.textContent = state.leagueName ? "– " + state.leagueName : "";
     els.weekLabel.textContent = state.week ? "Week " + state.week : "Preseason / waiting";
     renderPollInfo(state);
+    renderLeagueChips(state);
+  }
+
+  function leagueChipHtml(league) {
+    const statusClass = league.lastError ? "bad" : (league.detectorSeeded ? "good" : "pending");
+    const weekText = league.week ? "Week " + league.week : "waiting";
+    const name = league.name || league.key;
+    return (
+      '<div class="league-chip ' + statusClass + '" data-league-key="' + esc(league.key) + '">' +
+      '<span class="league-chip-name">' + esc(name) + "</span>" +
+      '<span class="league-chip-meta">' + esc(league.provider) + " • " + esc(weekText) + "</span>" +
+      (league.lastError ? '<span class="league-chip-error">' + esc(league.lastError) + "</span>" : "") +
+      "</div>"
+    );
+  }
+
+  function renderLeagueChips(state) {
+    const leagues = state.leagues || [];
+    if (leagues.length <= 1) {
+      els.leagueChips.innerHTML = "";
+      els.leagueChips.hidden = true;
+      return;
+    }
+    els.leagueChips.hidden = false;
+    els.leagueChips.innerHTML = leagues.map(leagueChipHtml).join("");
   }
 
   function playerRow(p) {
@@ -95,12 +121,13 @@
       : '<div class="score-vs">no matchup</div>';
 
     return (
-      '<article class="team-card" data-team-id="' + team.teamId + '">' +
+      '<article class="team-card" data-team-id="' + team.teamId + '" data-league-key="' + esc(team.leagueKey) + '">' +
       '<div class="team-card-header"><span class="team-label">' + esc(team.label) + "</span>" +
       '<span class="team-espn-name">' + esc(team.espnTeamName || "") + "</span></div>" +
+      '<div class="league-badge">' + esc(team.leagueName || team.leagueKey) + "</div>" +
       '<div class="score-row"><span class="score-mine">' + fmtPoints(team.points) + "</span>" + opponent + "</div>" +
       '<div class="sound-status ' + soundClass + '">' + esc(soundText) + "</div>" +
-      '<button class="test-btn" data-team-id="' + team.teamId + '">Test sound</button>' +
+      '<button class="test-btn" data-team-id="' + team.teamId + '" data-league-key="' + esc(team.leagueKey) + '">Test sound</button>' +
       body +
       "</article>"
     );
@@ -115,11 +142,13 @@
     els.teams.innerHTML = teams.map(teamCardHtml).join("");
   }
 
-  function alertRowHtml(a) {
+  function alertRowHtml(a, showLeague) {
     const testBadge = a.isTest ? '<span class="test-badge">TEST</span>' : "";
     const soundNote = a.soundFound ? "" : " (sound missing)";
+    const leagueBadge = showLeague ? '<span class="alert-league">' + esc(a.leagueKey) + "</span>" : "";
     return (
       "<li><span class=\"alert-time\">" + fmtTime(a.at) + "</span>" +
+      leagueBadge +
       '<span class="alert-team">' + esc(a.teamLabel) + "</span>" +
       "<span>" + esc(a.playerName) + " — " + esc(a.touchdownType) +
       (a.count > 1 ? " x" + a.count : "") + soundNote + "</span>" +
@@ -129,13 +158,17 @@
 
   function renderAlerts(state) {
     const alerts = state.recentAlerts || [];
+    const showLeague = (state.leagues || []).length > 1;
     els.alertLog.innerHTML = alerts.length
-      ? alerts.map(alertRowHtml).join("")
+      ? alerts.map((a) => alertRowHtml(a, showLeague)).join("")
       : '<li class="empty">No alerts yet</li>';
   }
 
-  function flashTeam(teamId) {
-    const card = els.teams.querySelector('[data-team-id="' + teamId + '"]');
+  function flashTeam(teamId, leagueKey) {
+    const selector = leagueKey
+      ? '[data-team-id="' + teamId + '"][data-league-key="' + leagueKey + '"]'
+      : '[data-team-id="' + teamId + '"]';
+    const card = els.teams.querySelector(selector);
     if (!card) return;
     card.classList.remove("flash");
     // force reflow so the animation restarts if it's already flashing
@@ -154,9 +187,11 @@
     const btn = e.target.closest(".test-btn");
     if (!btn) return;
     const teamId = btn.dataset.teamId;
+    const leagueKey = btn.dataset.leagueKey;
     btn.disabled = true;
     try {
-      const res = await fetch("/api/test/" + teamId, { method: "POST" });
+      const url = leagueKey ? "/api/test/" + leagueKey + "/" + teamId : "/api/test/" + teamId;
+      const res = await fetch(url, { method: "POST" });
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
         alert("Test alert failed: " + (body.error || res.statusText));
@@ -203,7 +238,7 @@
 
   connection.on("state", renderState);
   connection.on("alert", (alert) => {
-    flashTeam(alert.teamId);
+    flashTeam(alert.teamId, alert.leagueKey);
   });
 
   connection.onreconnecting(() => setConnectionStatus(false, "reconnecting..."));

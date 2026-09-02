@@ -27,11 +27,11 @@ Start-Process powershell -ArgumentList @(
     "cd '$repoRoot'; dotnet run --project src/TouchdownAlert.Simulator -- --Urls=$SimUrl"
 )
 
-Write-Host "Starting App on $AppUrl (Espn:BaseUrl=$SimUrl, Polling:IntervalSeconds=$PollSeconds) ..."
+Write-Host "Starting App on $AppUrl (Leagues:0:BaseUrl=$SimUrl, Polling:IntervalSeconds=$PollSeconds) ..."
 Start-Process powershell -ArgumentList @(
     "-NoExit",
     "-Command",
-    "cd '$repoRoot'; dotnet run --project src/TouchdownAlert.App -- --Urls=$AppUrl --Espn:BaseUrl=$SimUrl --Polling:IntervalSeconds=$PollSeconds"
+    "cd '$repoRoot'; dotnet run --project src/TouchdownAlert.App -- --Urls=$AppUrl --Leagues:0:BaseUrl=$SimUrl --Polling:IntervalSeconds=$PollSeconds"
 )
 
 Write-Host "Waiting a few seconds for both to come up..."
