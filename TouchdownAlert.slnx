@@ -1,0 +1,11 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/TouchdownAlert.App/TouchdownAlert.App.csproj" />
+    <Project Path="src/TouchdownAlert.Core/TouchdownAlert.Core.csproj" />
+    <Project Path="src/TouchdownAlert.Simulator/TouchdownAlert.Simulator.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/TouchdownAlert.Core.Tests/TouchdownAlert.Core.Tests.csproj" />
+    <Project Path="tests/TouchdownAlert.IntegrationTests/TouchdownAlert.IntegrationTests.csproj" />
+  </Folder>
+</Solution>

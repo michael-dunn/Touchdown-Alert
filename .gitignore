@@ -1,0 +1,12 @@
+bin/
+obj/
+*.user
+*.suo
+.vs/
+.idea/
+*.swp
+TestResults/
+appsettings.Local.json
+sounds/*
+!sounds/README.md
+!sounds/.gitkeep
