@@ -22,4 +22,8 @@
     <ProjectReference Include="..\..\src\TouchdownAlert.Core\TouchdownAlert.Core.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <None Include="..\..\fixtures\*.json" CopyToOutputDirectory="PreserveNewest" LinkBase="fixtures" />
+  </ItemGroup>
+
 </Project>
