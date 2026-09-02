@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>TouchdownAlert</title>
+  <link rel="stylesheet" href="app.css" />
+</head>
+<body>
+  <header class="topbar">
+    <div class="topbar-row">
+      <h1>TouchdownAlert<span id="league-name" class="league-name"></span></h1>
+      <div class="conn">
+        <span id="conn-dot" class="dot dot-off"></span>
+        <span id="conn-text">connecting...</span>
+      </div>
+    </div>
+    <div class="topbar-row meta">
+      <span id="week-label">Week --</span>
+      <span id="poll-info">--</span>
+      <div class="actions">
+        <button id="btn-poll">Poll now</button>
+        <button id="btn-reset">Re-seed detector</button>
+      </div>
+    </div>
+    <div id="error-banner" class="error-banner" hidden></div>
+  </header>
+
+  <main>
+    <section id="teams" class="teams-grid"></section>
+
+    <section class="alerts-panel">
+      <h2>Alert log</h2>
+      <ul id="alert-log" class="alert-log"></ul>
+    </section>
+  </main>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/microsoft-signalr/8.0.7/signalr.min.js"
+          onerror="window.__signalrFailed = true"></script>
+  <script src="app.js"></script>
+</body>
+</html>
