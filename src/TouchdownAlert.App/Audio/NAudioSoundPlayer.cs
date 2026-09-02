@@ -1,6 +1,7 @@
 using System.Threading.Channels;
 using Microsoft.Extensions.Options;
 using NAudio.Wave;
+using NAudio.Wave.SampleProviders;
 using TouchdownAlert.Core.Abstractions;
 using TouchdownAlert.Core.Configuration;
 
@@ -62,13 +63,28 @@ public sealed class NAudioSoundPlayer : ISoundPlayer, IDisposable
 
         // Intentionally not `using` here: disposal is deferred to AwaitAndCleanup, which runs
         // after playback finishes (PlaybackStopped fires asynchronously on NAudio's own thread).
+        var options = _options.CurrentValue;
         var reader = new AudioFileReader(path)
         {
-            Volume = Math.Clamp(_options.CurrentValue.Volume, 0f, 1f),
+            Volume = Math.Clamp(options.Volume, 0f, 1f),
         };
+
+        // Cap playback length by trimming the sample stream itself: the clip simply ends at the cap,
+        // so PlaybackStopped fires naturally and no timer/race is needed. A cap <= 0 disables the limit.
+        var cap = TimeSpan.FromSeconds(options.MaxDurationSeconds);
+        ISampleProvider source = reader;
+        var truncated = false;
+        if (cap > TimeSpan.Zero && reader.TotalTime > cap)
+        {
+            source = new OffsetSampleProvider(reader) { Take = cap };
+            truncated = true;
+        }
+
         // NAudio 3.x WaveOut is the event-driven player (formerly WaveOutEvent), safe in a console host.
         var output = new WaveOut();
-        _logger.LogInformation("Playing {SoundFilePath}", path);
+        _logger.LogInformation(
+            "Playing {SoundFilePath} ({Duration:0.0}s{Truncated})",
+            path, reader.TotalTime.TotalSeconds, truncated ? $", capped at {cap.TotalSeconds:0}s" : string.Empty);
 
         output.PlaybackStopped += (_, e) =>
         {
@@ -82,7 +98,7 @@ public sealed class NAudioSoundPlayer : ISoundPlayer, IDisposable
             }
         };
 
-        output.Init(reader);
+        output.Init(source);
         output.Play();
         return AwaitAndCleanup(tcs.Task, output, reader);
     }

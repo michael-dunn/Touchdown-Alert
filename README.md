@@ -40,7 +40,8 @@ reference them by file name:
   },
   "Sounds": {
     "Directory": "sounds",
-    "Volume": 1.0
+    "Volume": 1.0,
+    "MaxDurationSeconds": 5
   },
   "Alerts": {
     "WatchedTeams": [
@@ -52,6 +53,9 @@ reference them by file name:
   }
 }
 ```
+
+Clips are cut off after `MaxDurationSeconds` (default 5) so a long file can't drown out the
+next alert; set it to `0` to always play files in full.
 
 Up to four teams are supported. `TeamId` is the ESPN fantasy team id within the
 league (visible in the ESPN app/site URL or team settings). When one touchdown

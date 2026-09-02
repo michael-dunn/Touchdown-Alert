@@ -50,6 +50,12 @@ public sealed class SoundOptions
 
     /// <summary>Output volume 0.0 - 1.0.</summary>
     public float Volume { get; set; } = 1.0f;
+
+    /// <summary>
+    /// Longest any one clip is allowed to play, in seconds. Longer files are cut off at this point.
+    /// Zero or negative disables the cap.
+    /// </summary>
+    public double MaxDurationSeconds { get; set; } = 5;
 }
 
 public sealed class AlertOptions
