@@ -1,10 +1,14 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFramework>net10.0</TargetFramework>
+    <!-- Matches TouchdownAlert.App's TFM (net10.0-windows7.0, required by its NAudio dependency) so this
+         project can reference it. Core and Simulator both target plain net10.0, which a -windows TFM
+         can still consume. -->
+    <TargetFramework>net10.0-windows7.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <IsPackable>false</IsPackable>
+    <DefineConstants>$(DefineConstants);APP_READY</DefineConstants>
   </PropertyGroup>
 
   <ItemGroup>
@@ -21,8 +25,16 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\TouchdownAlert.Core\TouchdownAlert.Core.csproj" />
-    <ProjectReference Include="..\..\src\TouchdownAlert.App\TouchdownAlert.App.csproj" />
-    <ProjectReference Include="..\..\src\TouchdownAlert.Simulator\TouchdownAlert.Simulator.csproj" />
+    <!-- Both App and Simulator are top-level-statement Program.cs files, so both emit a `Program` type in
+         the GLOBAL namespace. Referencing both assemblies in one compilation is otherwise ambiguous
+         (CS0433), so each gets an extern alias - see AppProgram.cs / SimulatorProgram.cs for the
+         `extern alias` + `global using` that turn them back into normal usable names. -->
+    <ProjectReference Include="..\..\src\TouchdownAlert.App\TouchdownAlert.App.csproj">
+      <Aliases>AppAssembly</Aliases>
+    </ProjectReference>
+    <ProjectReference Include="..\..\src\TouchdownAlert.Simulator\TouchdownAlert.Simulator.csproj">
+      <Aliases>SimulatorAssembly</Aliases>
+    </ProjectReference>
   </ItemGroup>
 
 </Project>

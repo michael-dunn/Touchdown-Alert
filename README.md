@@ -96,9 +96,26 @@ dotnet test
 
 ## Simulating a live game
 
-For testing touchdown detection without waiting on a real NFL game, point
-`Espn:BaseUrl` at the simulator instead of ESPN's live API. See
-`src/TouchdownAlert.Simulator/README.md` for how to run and drive it.
+The simulator is a fake ESPN API with its own control console, so you can rehearse a whole
+game day without an NFL game on.
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts\run-sim-demo.ps1
+```
+
+That opens two windows: the simulator console at http://localhost:5199 and the app dashboard at
+http://localhost:5055, polling the simulator every 5 seconds. Click a TD button next to any
+starter on a watched team in the simulator, or use **Random TD** / **Autoplay**, and the dashboard
+flashes and your sound plays a few seconds later.
+
+Manual equivalent:
+
+```powershell
+dotnet run --project src/TouchdownAlert.Simulator
+dotnet run --project src/TouchdownAlert.App -- --Espn:BaseUrl=http://localhost:5199 --Polling:IntervalSeconds=5
+```
+
+Full control API and details: `src/TouchdownAlert.Simulator/README.md`.
 
 ## HTTP API
 

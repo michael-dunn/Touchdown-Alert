@@ -80,3 +80,6 @@ app.MapPost("/api/test/{teamId:int}", async (int teamId, IAlertRouter router, IO
 });
 
 app.Run();
+
+/// <summary>Exposed for WebApplicationFactory in integration tests.</summary>
+public partial class Program;

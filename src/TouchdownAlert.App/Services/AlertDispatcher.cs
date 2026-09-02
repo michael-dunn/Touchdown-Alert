@@ -36,6 +36,11 @@ public sealed class AlertDispatcher
         var resolvedPath = _soundResolver.Resolve(alert.SoundFile);
         var soundFound = resolvedPath is not null;
 
+        _logger.LogInformation(
+            "{Kind} alert for {TeamLabel} ({TeamId}): {Player} {Type} x{Count} -> {SoundFile}",
+            alert.IsTest ? "TEST" : "TOUCHDOWN", alert.TeamLabel, alert.TeamId,
+            alert.Touchdown.PlayerName, alert.Touchdown.Type, alert.Touchdown.Count, alert.SoundFile);
+
         if (soundFound)
         {
             _soundPlayer.Enqueue(resolvedPath!);

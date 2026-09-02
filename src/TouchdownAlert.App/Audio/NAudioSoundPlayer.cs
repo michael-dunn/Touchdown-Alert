@@ -66,7 +66,9 @@ public sealed class NAudioSoundPlayer : ISoundPlayer, IDisposable
         {
             Volume = Math.Clamp(_options.CurrentValue.Volume, 0f, 1f),
         };
+        // NAudio 3.x WaveOut is the event-driven player (formerly WaveOutEvent), safe in a console host.
         var output = new WaveOut();
+        _logger.LogInformation("Playing {SoundFilePath}", path);
 
         output.PlaybackStopped += (_, e) =>
         {

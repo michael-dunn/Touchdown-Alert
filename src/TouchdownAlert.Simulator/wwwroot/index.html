@@ -1,0 +1,200 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>TouchdownAlert Simulator</title>
+<style>
+  :root { color-scheme: dark; }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: #0f1115; color: #e6e6e6;
+    font-family: -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+  }
+  header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 12px 20px; background: #171a21; border-bottom: 1px solid #2a2e37;
+    position: sticky; top: 0; z-index: 10;
+  }
+  header h1 { font-size: 18px; margin: 0; }
+  header .status { font-size: 13px; color: #9aa4b2; }
+  .top-controls { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; padding: 12px 20px; background: #12151b; border-bottom: 1px solid #2a2e37; }
+  button {
+    background: #2563eb; color: white; border: none; border-radius: 6px;
+    padding: 6px 12px; font-size: 13px; cursor: pointer;
+  }
+  button:hover { background: #3b76f0; }
+  button.secondary { background: #333947; }
+  button.secondary:hover { background: #454c5d; }
+  button.danger { background: #b91c1c; }
+  button.danger:hover { background: #d32f2f; }
+  input[type=number], input[type=text] {
+    background: #1b1f27; border: 1px solid #333947; color: #e6e6e6;
+    border-radius: 6px; padding: 5px 8px; font-size: 13px; width: 80px;
+  }
+  label { font-size: 12px; color: #9aa4b2; margin-right: 4px; }
+  main { display: grid; grid-template-columns: repeat(auto-fill, minmax(310px, 1fr)); gap: 14px; padding: 16px 20px; }
+  .team {
+    background: #171a21; border: 1px solid #2a2e37; border-radius: 10px; padding: 12px 14px;
+  }
+  .team.watchable { border-color: #2563eb; box-shadow: 0 0 0 1px #2563eb inset; }
+  .team h2 { font-size: 15px; margin: 0 0 4px; display: flex; justify-content: space-between; }
+  .team .points { color: #7dd3fc; font-weight: 600; }
+  .player-row {
+    display: flex; align-items: center; gap: 6px; padding: 4px 0;
+    border-bottom: 1px solid #22262f; font-size: 12.5px;
+  }
+  .player-row:last-child { border-bottom: none; }
+  .slot { color: #9aa4b2; width: 34px; flex-shrink: 0; }
+  .pname { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .ppoints { width: 44px; text-align: right; color: #7dd3fc; }
+  .tdbtns { display: flex; gap: 3px; }
+  .tdbtns button { padding: 2px 6px; font-size: 10.5px; background: #374151; }
+  .tdbtns button:hover { background: #4b5563; }
+  .bench-toggle { font-size: 11px; color: #9aa4b2; cursor: pointer; margin-top: 6px; }
+  .bench { display: none; margin-top: 4px; }
+  .bench.open { display: block; }
+  #log {
+    margin: 0 20px 20px; background: #0b0d11; border: 1px solid #2a2e37; border-radius: 10px;
+    padding: 10px 14px; height: 160px; overflow-y: auto; font-family: Consolas, monospace; font-size: 12px; color: #9aa4b2;
+  }
+  #log div:last-child { color: #e6e6e6; }
+  section h3 { margin: 20px 20px 8px; font-size: 13px; color: #9aa4b2; text-transform: uppercase; letter-spacing: .04em; }
+</style>
+</head>
+<body>
+<header>
+  <h1>TouchdownAlert Simulator</h1>
+  <div class="status" id="status">loading...</div>
+</header>
+
+<div class="top-controls">
+  <button class="secondary" id="btn-refresh">Refresh now</button>
+  <span style="width:1px;height:20px;background:#333947"></span>
+  <label>Reset week</label>
+  <input type="number" id="reset-week" value="1" min="1" max="17" />
+  <button class="danger" id="btn-reset">Reset</button>
+  <span style="width:1px;height:20px;background:#333947"></span>
+  <label>Autoplay every</label>
+  <input type="number" id="autoplay-interval" value="20" min="2" />
+  <label>sec, focus teams</label>
+  <input type="text" id="autoplay-focus" placeholder="1,3" />
+  <button id="btn-autoplay-start">Start autoplay</button>
+  <button class="secondary" id="btn-autoplay-stop">Stop autoplay</button>
+  <span id="autoplay-status" style="font-size:12px;color:#9aa4b2"></span>
+</div>
+
+<main id="teams"></main>
+
+<section>
+  <h3>Event log</h3>
+</section>
+<div id="log"></div>
+
+<script>
+const TD_TYPES_BY_POS = {
+  QB: ['Passing', 'Rushing'],
+  RB: ['Rushing', 'Receiving'],
+  WR: ['Receiving'],
+  TE: ['Receiving'],
+  'D/ST': ['InterceptionReturn', 'FumbleReturn', 'KickReturn', 'PuntReturn', 'BlockedKickReturn'],
+  K: [],
+};
+const TD_SHORT = { Passing: 'Pass', Rushing: 'Rush', Receiving: 'Rec', InterceptionReturn: 'INT', FumbleReturn: 'Fum', KickReturn: 'KR', PuntReturn: 'PR', BlockedKickReturn: 'BK' };
+
+async function api(method, path) {
+  const res = await fetch(path, { method });
+  if (!res.ok) {
+    log(`ERROR ${method} ${path}: ${res.status}`);
+  }
+  return res.ok ? res.json().catch(() => ({})) : null;
+}
+
+function log(msg) {
+  const el = document.getElementById('log');
+  const d = document.createElement('div');
+  d.textContent = msg;
+  el.appendChild(d);
+  el.scrollTop = el.scrollHeight;
+}
+
+function renderPlayer(p, teamId) {
+  const tds = TD_TYPES_BY_POS[p.position] || [];
+  const btns = tds.map(t =>
+    `<button data-player="${p.id}" data-type="${t}" class="td-btn">${TD_SHORT[t]}</button>`
+  ).join('');
+  return `<div class="player-row">
+    <span class="slot">${p.slot}</span>
+    <span class="pname" title="${p.name}">${p.name}</span>
+    <span class="ppoints">${p.points.toFixed(1)}</span>
+    <span class="tdbtns">${btns}</span>
+  </div>`;
+}
+
+async function refresh() {
+  const state = await api('GET', '/sim/state');
+  if (!state) return;
+  document.getElementById('status').textContent = `Week ${state.week} - ${state.teams.length} teams`;
+
+  const ap = state.autoplay;
+  document.getElementById('autoplay-status').textContent = ap.running
+    ? `running (every ${ap.intervalSeconds}s, focus [${ap.focusTeamIds.join(',')}])`
+    : 'stopped';
+
+  const teamsEl = document.getElementById('teams');
+  teamsEl.innerHTML = state.teams.map(t => `
+    <div class="team">
+      <h2><span>${t.name} (#${t.id})</span><span class="points">${t.points.toFixed(1)}</span></h2>
+      ${t.starters.map(p => renderPlayer(p, t.id)).join('')}
+      <div class="bench-toggle" data-team="${t.id}">bench (${t.bench.length}) &#9662;</div>
+      <div class="bench" id="bench-${t.id}">
+        ${t.bench.map(p => renderPlayer(p, t.id)).join('')}
+      </div>
+      <div style="margin-top:8px"><button class="secondary random-td" data-team="${t.id}">Random TD</button></div>
+    </div>
+  `).join('');
+
+  document.getElementById('log').innerHTML = state.eventLog.map(e => `<div>${e}</div>`).join('');
+  document.getElementById('log').scrollTop = document.getElementById('log').scrollHeight;
+}
+
+document.addEventListener('click', async (e) => {
+  const t = e.target;
+  if (t.classList.contains('td-btn')) {
+    await fetch('/sim/touchdown', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ playerId: Number(t.dataset.player), type: t.dataset.type, count: 1 }),
+    });
+    refresh();
+  } else if (t.classList.contains('random-td')) {
+    await fetch(`/sim/touchdown/random?teamId=${t.dataset.team}`, { method: 'POST' });
+    refresh();
+  } else if (t.classList.contains('bench-toggle')) {
+    document.getElementById('bench-' + t.dataset.team).classList.toggle('open');
+  }
+});
+
+document.getElementById('btn-refresh').addEventListener('click', refresh);
+
+document.getElementById('btn-reset').addEventListener('click', async () => {
+  const week = document.getElementById('reset-week').value || 1;
+  await fetch(`/sim/reset?week=${week}`, { method: 'POST' });
+  refresh();
+});
+
+document.getElementById('btn-autoplay-start').addEventListener('click', async () => {
+  const interval = document.getElementById('autoplay-interval').value || 20;
+  const focus = document.getElementById('autoplay-focus').value || '';
+  await fetch(`/sim/autoplay/start?intervalSeconds=${interval}&focusTeamIds=${encodeURIComponent(focus)}`, { method: 'POST' });
+  refresh();
+});
+
+document.getElementById('btn-autoplay-stop').addEventListener('click', async () => {
+  await fetch('/sim/autoplay/stop', { method: 'POST' });
+  refresh();
+});
+
+refresh();
+setInterval(refresh, 2000);
+</script>
+</body>
+</html>
