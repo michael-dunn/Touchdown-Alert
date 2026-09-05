@@ -1,13 +1,14 @@
 # stop-gameday.ps1
-# Stops the TouchdownAlert App and Overlay processes started by start-gameday.ps1. Only ever touches
-# processes by these two exact names - never Edge/Firefox, so the game keeps playing.
+# Stops the TouchdownAlert App, Overlay and Simulator processes started by start-gameday.ps1 or
+# run-sim-demo.ps1. Only ever touches processes by these exact names - never Edge/Firefox, so the
+# game keeps playing.
 #
 # Usage:
 #   powershell -ExecutionPolicy Bypass -File scripts\stop-gameday.ps1
 
 $ErrorActionPreference = "Continue"
 
-$names = @("TouchdownAlert.App", "TouchdownAlert.Overlay")
+$names = @("TouchdownAlert.App", "TouchdownAlert.Overlay", "TouchdownAlert.Simulator")
 
 foreach ($name in $names) {
     $procs = Get-Process -Name $name -ErrorAction SilentlyContinue

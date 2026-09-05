@@ -23,30 +23,12 @@ param(
 
 $ErrorActionPreference = "Stop"
 
+. (Join-Path $PSScriptRoot "lib\Common.ps1")
+
 $repoRoot = Split-Path -Parent $PSScriptRoot
 $appProjectDir = Join-Path $repoRoot "src\TouchdownAlert.App"
 $appExe = Join-Path $appProjectDir "bin\Release\net10.0-windows\TouchdownAlert.App.exe"
 $overlayExe = Join-Path $repoRoot "src\TouchdownAlert.Overlay\bin\Release\net10.0-windows\TouchdownAlert.Overlay.exe"
-
-function Test-Health([string]$url) {
-    try {
-        $response = Invoke-WebRequest -Uri "$url/api/health" -UseBasicParsing -TimeoutSec 3
-        return $response.StatusCode -eq 200
-    } catch {
-        return $false
-    }
-}
-
-function Wait-ForHealth([string]$url, [int]$timeoutSeconds) {
-    $deadline = (Get-Date).AddSeconds($timeoutSeconds)
-    while ((Get-Date) -lt $deadline) {
-        if (Test-Health $url) {
-            return $true
-        }
-        Start-Sleep -Seconds 1
-    }
-    return $false
-}
 
 # --- App host -----------------------------------------------------------------------------------
 
@@ -98,44 +80,7 @@ if ($NoOverlay) {
 if ($NoDashboard) {
     Write-Host "Skipping dashboard (-NoDashboard)."
 } else {
-    $msedge = $null
-    $appPathsKey = "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\App Paths\msedge.exe"
-    if (Test-Path $appPathsKey) {
-        $msedge = (Get-ItemProperty $appPathsKey).'(default)'
-    }
-    if (-not $msedge -or -not (Test-Path $msedge)) {
-        $candidate = "${env:ProgramFiles(x86)}\Microsoft\Edge\Application\msedge.exe"
-        if (Test-Path $candidate) {
-            $msedge = $candidate
-        }
-    }
-    if (-not $msedge -or -not (Test-Path $msedge)) {
-        $candidate = "$env:ProgramFiles\Microsoft\Edge\Application\msedge.exe"
-        if (Test-Path $candidate) {
-            $msedge = $candidate
-        }
-    }
-
-    if (-not $msedge) {
-        Write-Warning "Could not find msedge.exe - skipping dashboard. Open $AppUrl manually."
-    } else {
-        Add-Type -AssemblyName System.Windows.Forms
-        $screens = [System.Windows.Forms.Screen]::AllScreens
-        $target = $screens | Where-Object { -not $_.Primary } | Select-Object -First 1
-        if (-not $target) {
-            Write-Host "Only one display detected - opening dashboard on the primary display."
-            $target = $screens | Where-Object { $_.Primary } | Select-Object -First 1
-        }
-        $bounds = $target.Bounds
-
-        Write-Host "Opening dashboard on display at ($($bounds.X),$($bounds.Y)) size $($bounds.Width)x$($bounds.Height) ..."
-        Start-Process -FilePath $msedge -ArgumentList @(
-            "--app=$AppUrl/",
-            "--window-position=$($bounds.X),$($bounds.Y)",
-            "--window-size=$($bounds.Width),$($bounds.Height)",
-            "--start-fullscreen"
-        ) | Out-Null
-    }
+    Start-EdgeDashboard $AppUrl | Out-Null
 }
 
 Write-Host ""
