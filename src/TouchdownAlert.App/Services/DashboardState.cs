@@ -251,6 +251,7 @@ public sealed class DashboardState
                 EspnTeamName: null,
                 Points: null,
                 TouchdownTotal: 0,
+                TouchdownsByType: BuildTouchdownsByType(Array.Empty<RosteredPlayer>()),
                 Opponent: null,
                 SoundFile: watched.SoundFile,
                 SoundFound: resolvedPath is not null,
@@ -270,7 +271,8 @@ public sealed class DashboardState
             opponent = new OpponentViewModel(opponentTeamId, opponentTeam?.Name ?? $"Team {opponentTeamId}", opponentPoints);
         }
 
-        var starters = team.Roster.Where(p => p.IsStarter).Select(ToPlayerViewModel).ToList();
+        var starterPlayers = team.Roster.Where(p => p.IsStarter).ToList();
+        var starters = starterPlayers.Select(ToPlayerViewModel).ToList();
         var bench = team.Roster.Where(p => !p.IsStarter).Select(ToPlayerViewModel).ToList();
 
         return new WatchedTeamViewModel(
@@ -282,6 +284,7 @@ public sealed class DashboardState
             EspnTeamName: team.Name,
             Points: team.Points,
             TouchdownTotal: starters.Sum(p => p.TouchdownTotal),
+            TouchdownsByType: BuildTouchdownsByType(starterPlayers),
             Opponent: opponent,
             SoundFile: watched.SoundFile,
             SoundFound: resolvedPath is not null,
@@ -290,6 +293,46 @@ public sealed class DashboardState
             Starters: starters,
             Bench: bench);
     }
+
+    /// <summary>Touchdown types shown on every tile even when the count is zero.</summary>
+    private static readonly TouchdownType[] AlwaysShownTouchdownTypes =
+    {
+        TouchdownType.Passing,
+        TouchdownType.Rushing,
+        TouchdownType.Receiving,
+    };
+
+    /// <summary>Sums each touchdown type over the given starters, in enum order. Core types are always listed;
+    /// the rarer return/defensive types are only listed once at least one has been scored.</summary>
+    public static IReadOnlyList<TouchdownTypeCountViewModel> BuildTouchdownsByType(IReadOnlyList<RosteredPlayer> starters)
+    {
+        var result = new List<TouchdownTypeCountViewModel>();
+        foreach (var type in Enum.GetValues<TouchdownType>())
+        {
+            var count = starters.Sum(p => p.Touchdowns.Get(type));
+            if (count > 0 || AlwaysShownTouchdownTypes.Contains(type))
+            {
+                result.Add(new TouchdownTypeCountViewModel(type.ToString(), TouchdownTypeLabel(type), count));
+            }
+        }
+
+        return result;
+    }
+
+    public static string TouchdownTypeLabel(TouchdownType type) => type switch
+    {
+        TouchdownType.Passing => "Pass",
+        TouchdownType.Rushing => "Rush",
+        TouchdownType.Receiving => "Rec",
+        TouchdownType.KickReturn => "KR",
+        TouchdownType.PuntReturn => "PR",
+        TouchdownType.FumbleReturn => "Fum Ret",
+        TouchdownType.InterceptionReturn => "INT Ret",
+        TouchdownType.BlockedKickReturn => "Blk Kick",
+        TouchdownType.Return => "Return",
+        TouchdownType.Defensive => "Def",
+        _ => type.ToString(),
+    };
 
     private static PlayerViewModel ToPlayerViewModel(RosteredPlayer player) => new(
         player.LineupSlot,

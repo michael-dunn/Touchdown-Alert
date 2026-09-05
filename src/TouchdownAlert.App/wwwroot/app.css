@@ -272,6 +272,47 @@ main {
   margin-left: 0.2em;
 }
 
+.tile-td-types {
+  display: flex;
+  flex-wrap: wrap;
+  gap: clamp(0.3rem, 0.8vh, 0.6rem);
+  margin-top: clamp(0.4rem, 1.4vh, 0.9rem);
+}
+
+.tile-td-type {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.35em;
+  font-size: clamp(0.8rem, 2.2vh, 1.5rem);
+  line-height: 1;
+  padding: 0.3em 0.65em;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: rgba(5, 7, 10, 0.45);
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.tile-td-type-label {
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  font-size: 0.75em;
+}
+
+.tile-td-type-count {
+  font-weight: 800;
+}
+
+.tile-td-type.has-td {
+  color: var(--fg);
+  border-color: var(--team-color, var(--accent));
+}
+
+.tile-td-type.has-td .tile-td-type-count {
+  color: var(--team-color, var(--accent));
+}
+
 .tile-sub {
   font-size: clamp(0.6rem, 1.4vh, 1rem);
   color: var(--muted);

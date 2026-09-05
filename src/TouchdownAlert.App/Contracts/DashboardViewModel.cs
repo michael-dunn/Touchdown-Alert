@@ -42,6 +42,10 @@ public sealed record PlayerViewModel(
     double Points,
     int TouchdownTotal);
 
+/// <summary>One touchdown type's count across a team's current starters. <see cref="Type"/> is the
+/// <see cref="TouchdownAlert.Core.Models.TouchdownType"/> name; <see cref="Label"/> is the short dashboard label.</summary>
+public sealed record TouchdownTypeCountViewModel(string Type, string Label, int Count);
+
 public sealed record WatchedTeamViewModel(
     int TeamId,
     string LeagueKey,
@@ -53,6 +57,9 @@ public sealed record WatchedTeamViewModel(
     double? Points,
     /// <summary>Sum of touchdown counters across the team's current starters this week (the "(8)" on the tile).</summary>
     int TouchdownTotal,
+    /// <summary>Per-type breakdown of <see cref="TouchdownTotal"/>, in canonical type order. Passing, rushing and
+    /// receiving are always present (even at zero); return/defensive types appear only once they have a count.</summary>
+    IReadOnlyList<TouchdownTypeCountViewModel> TouchdownsByType,
     OpponentViewModel? Opponent,
     string SoundFile,
     bool SoundFound,

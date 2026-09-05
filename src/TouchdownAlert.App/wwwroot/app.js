@@ -145,6 +145,10 @@
         '<span class="tile-td-count">(' + (team.touchdownTotal || 0) + ")</span>";
     }
 
+    const tdTypes = team.points === null || team.points === undefined
+      ? ""
+      : tdTypesHtml(team.touchdownsByType || []);
+
     const staleNote = stale.stale && stale.ago
       ? '<div class="tile-stale-note">updated ' + esc(stale.ago) + "</div>"
       : "";
@@ -155,8 +159,24 @@
       '<div class="tile-label">' + esc(team.label) + "</div>" +
       '<div class="tile-league">' + esc(team.leagueName || team.leagueKey) + "</div>" +
       '<div class="tile-score" id="score-' + esc(key) + '">' + scoreInner + "</div>" +
+      tdTypes +
       subLine +
       staleNote +
+      "</div>"
+    );
+  }
+
+  // One "PASS 2" chip per touchdown type; types with a count light up in the team color.
+  function tdTypesHtml(types) {
+    if (types.length === 0) return "";
+    return (
+      '<div class="tile-td-types">' +
+      types.map((t) =>
+        '<span class="tile-td-type' + (t.count > 0 ? " has-td" : "") + '">' +
+        '<span class="tile-td-type-label">' + esc(t.label) + "</span>" +
+        '<span class="tile-td-type-count">' + esc(t.count) + "</span>" +
+        "</span>"
+      ).join("") +
       "</div>"
     );
   }
