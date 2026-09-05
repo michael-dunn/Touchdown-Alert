@@ -102,6 +102,34 @@ curl "http://localhost:5199/apis/v3/games/ffl/seasons/2026/segments/0/leagues/99
 `type` accepts any `TouchdownType` name: `Passing`, `Rushing`, `Receiving`, `KickReturn`, `PuntReturn`,
 `FumbleReturn`, `InterceptionReturn`, `BlockedKickReturn`.
 
+## Yahoo emulation
+
+The simulator also exposes the SAME league state over Yahoo-shaped XML endpoints, so you can run a
+two-source (ESPN + Yahoo) test offline without a real Yahoo login:
+
+| Method | Path | Notes |
+|---|---|---|
+| GET  | `/fantasy/v2/league/{key}` | League name/season/current_week. Any `{key}` is accepted and echoed back. |
+| GET  | `/fantasy/v2/league/{key}/settings` | Stat categories: 5/10/13 (Passing/Rushing/Reception TD, offense), 35 "Touchdown" (DT), 49 "Kickoff and Punt Return Touchdowns" (DT) |
+| GET  | `/fantasy/v2/league/{key}/scoreboard;week=N` | All matchups/teams for week N |
+| GET  | `/fantasy/v2/team/{key}.t.{id}/roster;week=N/players/stats;type=week;week=N` | One team's roster + per-player TD stats for week N |
+| POST | `/oauth2/get_token` | Fake OAuth2 token endpoint - accepts any code/refresh token, returns `{ access_token: "sim-token-N", refresh_token: "sim-refresh", expires_in: 3600 }` |
+
+Every `/fantasy/v2/...` route requires `Authorization: Bearer <anything>` (401 without it), so the
+real auth code path still gets exercised even though the simulator doesn't validate the token value.
+
+To point the App at the simulator's Yahoo emulation instead of (or alongside) its ESPN emulation:
+
+```powershell
+dotnet run --project src/TouchdownAlert.App -- `
+  --Leagues:1:Key=yahoo --Leagues:1:Provider=Yahoo --Leagues:1:LeagueId=nfl.l.1 `
+  --Leagues:1:BaseUrl=http://localhost:5199/fantasy/v2/ `
+  --Yahoo:TokenUrl=http://localhost:5199/oauth2/get_token --Yahoo:ClientId=sim --Yahoo:ClientSecret=sim
+```
+
+Then log in at http://localhost:5055/setup/yahoo (any pasted code works - the simulator's token
+endpoint accepts anything) and the "yahoo" league starts polling the simulator too.
+
 ## Notes on the simulated data
 
 - Teams/ids/names come from `fixtures/league-2026-preseason.json` (10 teams, ids 1-10). Week-1 matchup

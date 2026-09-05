@@ -38,6 +38,27 @@ public class TouchdownCountsTests
         Assert.Equal(TouchdownCounts.Zero, counts);
     }
 
+    [Fact]
+    public void Get_And_With_RoundTrip_ForReturnAndDefensive()
+    {
+        var counts = TouchdownCounts.Zero
+            .With(TouchdownType.Return, 2)
+            .With(TouchdownType.Defensive, 1);
+
+        Assert.Equal(2, counts.Get(TouchdownType.Return));
+        Assert.Equal(1, counts.Get(TouchdownType.Defensive));
+        Assert.Equal(3, counts.Total);
+    }
+
+    [Fact]
+    public void FromEspnStats_LeavesReturnAndDefensiveAtZero()
+    {
+        var counts = TouchdownCounts.FromEspnStats(new Dictionary<string, double> { ["4"] = 1 });
+
+        Assert.Equal(0, counts.Return);
+        Assert.Equal(0, counts.Defensive);
+    }
+
     private static IReadOnlyDictionary<string, double> FindSeasonActualStats(long playerId)
     {
         using var doc = TestFixtures.LoadDocument("players-2025-td-stat-verification.json");

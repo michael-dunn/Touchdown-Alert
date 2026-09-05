@@ -83,11 +83,23 @@ public class LeagueConfigurationTests
     }
 
     [Fact]
-    public void ValidateAndResolve_YahooProvider_ThrowsNotSupported()
+    public void ValidateAndResolve_YahooProvider_WithoutClientCredentials_Throws()
     {
         var leagues = new List<LeagueOptions> { new() { Key = "main", Provider = LeagueProvider.Yahoo, LeagueId = "1" } };
 
-        Assert.Throws<NotSupportedException>(() => LeagueConfigurationValidator.ValidateAndResolve(leagues, []));
+        Assert.Throws<InvalidOperationException>(() => LeagueConfigurationValidator.ValidateAndResolve(leagues, []));
+        Assert.Throws<InvalidOperationException>(() => LeagueConfigurationValidator.ValidateAndResolve(
+            leagues, [], new YahooOptions { ClientId = "", ClientSecret = "" }));
+        Assert.Throws<InvalidOperationException>(() => LeagueConfigurationValidator.ValidateAndResolve(
+            leagues, [], new YahooOptions { ClientId = "id-only", ClientSecret = "" }));
+    }
+
+    [Fact]
+    public void ValidateAndResolve_YahooProvider_WithClientCredentials_Passes()
+    {
+        var leagues = new List<LeagueOptions> { new() { Key = "main", Provider = LeagueProvider.Yahoo, LeagueId = "1" } };
+
+        LeagueConfigurationValidator.ValidateAndResolve(leagues, [], new YahooOptions { ClientId = "id", ClientSecret = "secret" });
     }
 
     [Fact]

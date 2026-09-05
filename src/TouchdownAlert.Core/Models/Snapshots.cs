@@ -9,11 +9,13 @@ public sealed record TouchdownCounts(
     int PuntReturn = 0,
     int FumbleReturn = 0,
     int InterceptionReturn = 0,
-    int BlockedKickReturn = 0)
+    int BlockedKickReturn = 0,
+    int Return = 0,
+    int Defensive = 0)
 {
     public static readonly TouchdownCounts Zero = new();
 
-    public int Total => Passing + Rushing + Receiving + KickReturn + PuntReturn + FumbleReturn + InterceptionReturn + BlockedKickReturn;
+    public int Total => Passing + Rushing + Receiving + KickReturn + PuntReturn + FumbleReturn + InterceptionReturn + BlockedKickReturn + Return + Defensive;
 
     public int Get(TouchdownType type) => type switch
     {
@@ -25,6 +27,8 @@ public sealed record TouchdownCounts(
         TouchdownType.FumbleReturn => FumbleReturn,
         TouchdownType.InterceptionReturn => InterceptionReturn,
         TouchdownType.BlockedKickReturn => BlockedKickReturn,
+        TouchdownType.Return => Return,
+        TouchdownType.Defensive => Defensive,
         _ => throw new ArgumentOutOfRangeException(nameof(type), type, null),
     };
 
@@ -38,10 +42,14 @@ public sealed record TouchdownCounts(
         TouchdownType.FumbleReturn => this with { FumbleReturn = value },
         TouchdownType.InterceptionReturn => this with { InterceptionReturn = value },
         TouchdownType.BlockedKickReturn => this with { BlockedKickReturn = value },
+        TouchdownType.Return => this with { Return = value },
+        TouchdownType.Defensive => this with { Defensive = value },
         _ => throw new ArgumentOutOfRangeException(nameof(type), type, null),
     };
 
-    /// <summary>Builds counts from an ESPN "stats" dictionary keyed by stat id (as string) with double values.</summary>
+    /// <summary>Builds counts from an ESPN "stats" dictionary keyed by stat id (as string) with double values.
+    /// ESPN reports return/defensive touchdowns via their specific stat ids, so <see cref="Return"/> and
+    /// <see cref="Defensive"/> (Yahoo-only, generic categories) are always left at zero here.</summary>
     public static TouchdownCounts FromEspnStats(IReadOnlyDictionary<string, double> stats)
     {
         int Read(int statId) => stats.TryGetValue(statId.ToString(), out var v) ? (int)Math.Round(v) : 0;

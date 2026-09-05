@@ -9,6 +9,7 @@ using TouchdownAlert.Core.Detection;
 using TouchdownAlert.Core.Espn;
 using TouchdownAlert.Core.Models;
 using TouchdownAlert.Core.Sounds;
+using TouchdownAlert.Core.Yahoo;
 
 namespace TouchdownAlert.Core.DependencyInjection;
 
@@ -29,19 +30,33 @@ public static class ServiceCollectionExtensions
         services.AddOptions<PollingOptions>().Bind(configuration.GetSection(PollingOptions.SectionName));
         services.AddOptions<SoundOptions>().Bind(configuration.GetSection(SoundOptions.SectionName));
         services.AddOptions<AlertOptions>().Bind(configuration.GetSection(AlertOptions.SectionName));
+        services.AddOptions<YahooOptions>().Bind(configuration.GetSection(YahooOptions.SectionName));
 
         services.AddSingleton(TimeProvider.System);
 
-        // Fail fast at startup: unique/non-empty league keys, resolvable watched-team leagues, Yahoo unsupported.
+        // Fail fast at startup: unique/non-empty league keys, resolvable watched-team leagues, and (for any
+        // Yahoo league) a configured ClientId/ClientSecret. NOT being logged in to Yahoo is deliberately not
+        // checked here - see YahooAuthException.
         var leagues = new LeaguesOptions();
         configuration.GetSection(LeaguesOptions.SectionName).Bind(leagues.Items);
         var alertOptions = new AlertOptions();
         configuration.GetSection(AlertOptions.SectionName).Bind(alertOptions);
-        LeagueConfigurationValidator.ValidateAndResolve(leagues.Items, alertOptions.WatchedTeams);
+        var yahooOptions = new YahooOptions();
+        configuration.GetSection(YahooOptions.SectionName).Bind(yahooOptions);
+        LeagueConfigurationValidator.ValidateAndResolve(leagues.Items, alertOptions.WatchedTeams, yahooOptions);
 
         services.AddSingleton<ITouchdownDetector, TouchdownDetector>();
         services.AddSingleton<IAlertRouter, AlertRouter>();
         services.AddSingleton<ISoundFileResolver, SoundFileResolver>();
+
+        services.AddSingleton<IYahooTokenStore, YahooTokenStore>();
+        services.AddHttpClient("yahoo-auth");
+        services.AddSingleton<IYahooAuthService>(provider => new YahooAuthService(
+            provider.GetRequiredService<IHttpClientFactory>().CreateClient("yahoo-auth"),
+            provider.GetRequiredService<IOptionsMonitor<YahooOptions>>(),
+            provider.GetRequiredService<IYahooTokenStore>(),
+            provider.GetRequiredService<TimeProvider>(),
+            provider.GetRequiredService<ILoggerFactory>().CreateLogger<YahooAuthService>()));
 
         // Register a named HttpClient per configured league so each ILeagueSource gets its own base
         // address/timeout, keyed the same way the ILeagueSource factory below looks them up.
@@ -54,12 +69,24 @@ public static class ServiceCollectionExtensions
             });
         }
 
+        foreach (var leagueOptions in leagues.Items.Where(l => l.Provider == LeagueProvider.Yahoo))
+        {
+            services.AddHttpClient(HttpClientName(leagueOptions.Key), (provider, client) =>
+            {
+                var apiBaseUrl = provider.GetRequiredService<IOptionsMonitor<YahooOptions>>().CurrentValue.ApiBaseUrl;
+                client.BaseAddress = new Uri(leagueOptions.BaseUrl ?? apiBaseUrl);
+                client.Timeout = TimeSpan.FromSeconds(leagueOptions.RequestTimeoutSeconds);
+            });
+        }
+
         services.AddSingleton<IEnumerable<ILeagueSource>>(provider =>
         {
             var httpClientFactory = provider.GetRequiredService<IHttpClientFactory>();
             var timeProvider = provider.GetRequiredService<TimeProvider>();
             var loggerFactory = provider.GetRequiredService<ILoggerFactory>();
             var currentLeagues = provider.GetRequiredService<IOptions<LeaguesOptions>>().Value.Items;
+            var alertOptionsMonitor = provider.GetRequiredService<IOptionsMonitor<AlertOptions>>();
+            var yahooAuth = provider.GetRequiredService<IYahooAuthService>();
 
             var sources = new List<ILeagueSource>();
             foreach (var leagueOptions in currentLeagues)
@@ -67,16 +94,24 @@ public static class ServiceCollectionExtensions
                 switch (leagueOptions.Provider)
                 {
                     case LeagueProvider.Espn:
-                        var client = httpClientFactory.CreateClient(HttpClientName(leagueOptions.Key));
+                        var espnClient = httpClientFactory.CreateClient(HttpClientName(leagueOptions.Key));
                         sources.Add(new EspnLeagueSource(
-                            client,
+                            espnClient,
                             leagueOptions,
                             timeProvider,
                             loggerFactory.CreateLogger<EspnLeagueSource>()));
                         break;
 
                     case LeagueProvider.Yahoo:
-                        throw new NotSupportedException("Yahoo leagues are not supported yet; coming soon");
+                        var yahooClient = httpClientFactory.CreateClient(HttpClientName(leagueOptions.Key));
+                        sources.Add(new YahooLeagueSource(
+                            yahooClient,
+                            leagueOptions,
+                            yahooAuth,
+                            alertOptionsMonitor,
+                            timeProvider,
+                            loggerFactory.CreateLogger<YahooLeagueSource>()));
+                        break;
 
                     default:
                         throw new NotSupportedException($"Unknown league provider \"{leagueOptions.Provider}\".");

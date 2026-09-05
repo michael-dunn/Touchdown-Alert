@@ -86,12 +86,46 @@ must say which one it's in.
 }
 ```
 
-Yahoo support is coming soon — configuring `"Provider": "Yahoo"` today throws a clear
-`NotSupportedException` at startup rather than silently doing nothing.
-
 Each `LeagueOptions` entry also accepts `BaseUrl` (provider default when omitted; point it at
 the simulator for local testing), `SeasonId`, `ScoringPeriodId`, and `RequestTimeoutSeconds` —
 the same per-league settings that used to live under the single `Espn` section.
+
+### Yahoo leagues
+
+Yahoo leagues need an OAuth2 login (Yahoo doesn't offer public read access the way ESPN does for
+non-private leagues), so there's a one-time setup step:
+
+1. Create a Yahoo developer app at https://developer.yahoo.com/apps/create/ - Fantasy Sports,
+   **read** permission is enough. Set the redirect URI to `oob` (out of band - Yahoo shows you a
+   code to copy instead of redirecting to a URL).
+2. Put the app's Client ID/Secret in a git-ignored `src/TouchdownAlert.App/appsettings.Local.json`:
+
+   ```json
+   {
+     "Yahoo": { "ClientId": "your-client-id", "ClientSecret": "your-client-secret" },
+     "Leagues": [
+       { "Key": "main", "Provider": "Espn", "LeagueId": "12345678" },
+       { "Key": "yahoo", "Provider": "Yahoo", "LeagueId": "123456" }
+     ]
+   }
+   ```
+
+   `LeagueId` can be a bare numeric league id (assumed to be in the `nfl` game for the current
+   season) or a full league key like `461.l.123456`.
+3. Run the app (`dotnet run --project src/TouchdownAlert.App`) and open
+   **http://localhost:5055/setup/yahoo**. Click "Open Yahoo login", log in, approve access, and
+   Yahoo shows you a short code. Paste it into the page and submit.
+
+That's it - the app polls the Yahoo league from then on. The saved token lives at
+`config/yahoo-token.json` (configurable via `Yahoo:TokenFilePath`) and is refreshed automatically;
+`config/` is git-ignored (except `config/README.md`) so the token never gets committed. If the
+token is ever invalid/expired and can't be refreshed, that league's dashboard chip shows
+"Yahoo: not logged in - open /setup/yahoo" instead of breaking anything else - just repeat step 3.
+Missing `Yahoo:ClientId`/`ClientSecret` for a configured Yahoo league fails fast at startup with a
+message telling you to add them to `appsettings.Local.json`; not being logged in yet does not.
+
+Yahoo rosters are only fetched for teams you're actually watching (`Alerts:WatchedTeams`) - Yahoo
+rate-limits aggressively, and the dashboard/alerts never need any other team's lineup.
 
 If a configured `SoundFile` can't be found, the dashboard still shows the alert —
 it just flags the sound as missing instead of silently failing.

@@ -1,0 +1,247 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>TouchdownAlert - Yahoo Setup</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #0b0f14;
+      --panel: #131a22;
+      --panel-2: #182130;
+      --border: #263140;
+      --text: #e7edf3;
+      --muted: #8a97a6;
+      --accent: #ff6b35;
+      --accent-2: #2ecc71;
+      --danger: #ff4d4f;
+      --font: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--font);
+      padding: 2rem 1rem 4rem;
+    }
+    main {
+      max-width: 560px;
+      margin: 0 auto;
+      display: flex;
+      flex-direction: column;
+      gap: 1.25rem;
+    }
+    h1 {
+      font-size: 1.25rem;
+      color: var(--accent);
+      margin: 0;
+    }
+    p { color: var(--muted); line-height: 1.5; margin: 0.25rem 0; }
+    .panel {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 1rem 1.25rem;
+    }
+    .status-row {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      font-size: 0.95rem;
+      margin-bottom: 0.4rem;
+    }
+    .dot {
+      width: 0.65rem;
+      height: 0.65rem;
+      border-radius: 50%;
+      display: inline-block;
+      flex: none;
+    }
+    .dot-good { background: var(--accent-2); box-shadow: 0 0 6px var(--accent-2); }
+    .dot-bad { background: var(--danger); }
+    .dot-pending { background: var(--muted); }
+    label {
+      display: block;
+      font-size: 0.8rem;
+      color: var(--muted);
+      margin: 0.75rem 0 0.3rem;
+    }
+    input[type=text] {
+      width: 100%;
+      background: var(--panel-2);
+      color: var(--text);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 0.5rem 0.6rem;
+      font-size: 0.9rem;
+    }
+    button {
+      background: var(--panel-2);
+      color: var(--text);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 0.5rem 0.9rem;
+      font-size: 0.85rem;
+      cursor: pointer;
+      margin-top: 0.75rem;
+      margin-right: 0.5rem;
+    }
+    button:hover { border-color: var(--accent); }
+    button.primary { background: var(--accent); color: #1a0f08; font-weight: 600; border: none; }
+    button.primary:hover { filter: brightness(1.1); }
+    #message {
+      margin-top: 0.75rem;
+      font-size: 0.85rem;
+      white-space: pre-wrap;
+    }
+    #message.error { color: var(--danger); }
+    #message.ok { color: var(--accent-2); }
+    a { color: var(--accent); }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>Yahoo Fantasy Setup</h1>
+    <p>Log in once so TouchdownAlert can poll your Yahoo league. Tokens are stored locally, not in this browser.</p>
+
+    <div class="panel">
+      <div class="status-row">
+        <span id="configured-dot" class="dot dot-pending"></span>
+        <span id="configured-text">Checking configuration...</span>
+      </div>
+      <div class="status-row">
+        <span id="login-dot" class="dot dot-pending"></span>
+        <span id="login-text">Checking login...</span>
+      </div>
+    </div>
+
+    <div class="panel">
+      <p>1. Click "Open Yahoo login" - it opens in a new tab. Log in and approve access; Yahoo will show you a short code.</p>
+      <button id="btn-open" class="primary" type="button">Open Yahoo login</button>
+
+      <p style="margin-top:1rem;">2. Paste that code below and submit it.</p>
+      <label for="code-input">Verification code</label>
+      <input id="code-input" type="text" placeholder="e.g. ab12cd34" autocomplete="off" />
+      <button id="btn-submit" class="primary" type="button">Submit code</button>
+      <button id="btn-logout" type="button">Log out</button>
+
+      <div id="message"></div>
+    </div>
+  </main>
+
+  <script>
+    (function () {
+      "use strict";
+
+      const els = {
+        configuredDot: document.getElementById("configured-dot"),
+        configuredText: document.getElementById("configured-text"),
+        loginDot: document.getElementById("login-dot"),
+        loginText: document.getElementById("login-text"),
+        btnOpen: document.getElementById("btn-open"),
+        btnSubmit: document.getElementById("btn-submit"),
+        btnLogout: document.getElementById("btn-logout"),
+        codeInput: document.getElementById("code-input"),
+        message: document.getElementById("message"),
+      };
+
+      function setDot(el, state) {
+        el.className = "dot dot-" + state;
+      }
+
+      function showMessage(text, kind) {
+        els.message.textContent = text || "";
+        els.message.className = kind ? kind : "";
+      }
+
+      async function refreshStatus() {
+        try {
+          const res = await fetch("/api/yahoo/status");
+          const status = await res.json();
+
+          if (status.isConfigured) {
+            setDot(els.configuredDot, "good");
+            els.configuredText.textContent = "Yahoo:ClientId / ClientSecret configured";
+          } else {
+            setDot(els.configuredDot, "bad");
+            els.configuredText.textContent = "Not configured - set Yahoo:ClientId/ClientSecret in appsettings.Local.json";
+          }
+
+          if (status.isLoggedIn) {
+            setDot(els.loginDot, "good");
+            const expires = status.expiresAtUtc ? new Date(status.expiresAtUtc).toLocaleString() : "unknown";
+            els.loginText.textContent = "Logged in (token good until " + expires + ")";
+          } else {
+            setDot(els.loginDot, "bad");
+            els.loginText.textContent = "Not logged in";
+          }
+        } catch (err) {
+          setDot(els.configuredDot, "bad");
+          setDot(els.loginDot, "bad");
+          els.configuredText.textContent = "Could not reach the app";
+          els.loginText.textContent = String(err);
+        }
+      }
+
+      els.btnOpen.addEventListener("click", async function () {
+        showMessage("", "");
+        try {
+          const res = await fetch("/api/yahoo/auth-url");
+          if (!res.ok) {
+            showMessage("Could not get the Yahoo login URL - is Yahoo:ClientId/ClientSecret configured?", "error");
+            return;
+          }
+          const data = await res.json();
+          window.open(data.url, "_blank", "noopener");
+        } catch (err) {
+          showMessage(String(err), "error");
+        }
+      });
+
+      els.btnSubmit.addEventListener("click", async function () {
+        const code = els.codeInput.value.trim();
+        if (!code) {
+          showMessage("Paste the code Yahoo gave you first.", "error");
+          return;
+        }
+
+        showMessage("Submitting...", "");
+        try {
+          const res = await fetch("/api/yahoo/code", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ code: code }),
+          });
+
+          if (!res.ok) {
+            const body = await res.json().catch(() => ({}));
+            showMessage("Login failed: " + (body.error || res.statusText), "error");
+            return;
+          }
+
+          els.codeInput.value = "";
+          showMessage("Logged in.", "ok");
+          await refreshStatus();
+        } catch (err) {
+          showMessage(String(err), "error");
+        }
+      });
+
+      els.btnLogout.addEventListener("click", async function () {
+        showMessage("", "");
+        try {
+          await fetch("/api/yahoo/logout", { method: "POST" });
+          showMessage("Logged out.", "ok");
+          await refreshStatus();
+        } catch (err) {
+          showMessage(String(err), "error");
+        }
+      });
+
+      refreshStatus();
+    })();
+  </script>
+</body>
+</html>

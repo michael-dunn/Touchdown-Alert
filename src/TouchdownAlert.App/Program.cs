@@ -3,6 +3,7 @@ using TouchdownAlert.App.Hubs;
 using TouchdownAlert.App.Services;
 using TouchdownAlert.Core.Abstractions;
 using TouchdownAlert.Core.DependencyInjection;
+using TouchdownAlert.Core.Yahoo;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -41,6 +42,50 @@ app.UseDefaultFiles();
 app.UseStaticFiles();
 
 app.MapHub<DashboardHub>("/hub");
+
+app.MapGet("/setup/yahoo", async (HttpContext context) =>
+{
+    context.Response.ContentType = "text/html";
+    await context.Response.SendFileAsync(Path.Combine(app.Environment.WebRootPath, "setup", "yahoo.html"));
+});
+
+app.MapGet("/api/yahoo/status", async (IYahooAuthService auth) => Results.Ok(await auth.GetStatusAsync()));
+
+app.MapGet("/api/yahoo/auth-url", (IYahooAuthService auth) =>
+{
+    try
+    {
+        return Results.Ok(new { url = auth.GetAuthorizationUrl().ToString() });
+    }
+    catch (Exception ex)
+    {
+        return Results.BadRequest(new { error = ex.Message });
+    }
+});
+
+app.MapPost("/api/yahoo/code", async (YahooCodeRequest body, IYahooAuthService auth) =>
+{
+    if (string.IsNullOrWhiteSpace(body.Code))
+    {
+        return Results.BadRequest(new { error = "Code must not be blank." });
+    }
+
+    try
+    {
+        await auth.ExchangeCodeAsync(body.Code, CancellationToken.None);
+        return Results.Ok(await auth.GetStatusAsync());
+    }
+    catch (Exception ex)
+    {
+        return Results.BadRequest(new { error = ex.Message });
+    }
+});
+
+app.MapPost("/api/yahoo/logout", (IYahooTokenStore tokenStore) =>
+{
+    tokenStore.Delete();
+    return Results.Ok();
+});
 
 app.MapGet("/api/state", (DashboardState state) => Results.Ok(state.ToViewModel()));
 
@@ -111,3 +156,5 @@ app.Run();
 
 /// <summary>Exposed for WebApplicationFactory in integration tests.</summary>
 public partial class Program;
+
+public sealed record YahooCodeRequest(string Code);

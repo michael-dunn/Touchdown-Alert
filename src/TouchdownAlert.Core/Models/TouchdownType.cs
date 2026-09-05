@@ -13,6 +13,12 @@ public enum TouchdownType
     FumbleReturn,
     InterceptionReturn,
     BlockedKickReturn,
+
+    /// <summary>A generic return touchdown (kick or punt) where the provider doesn't distinguish which. Yahoo-only.</summary>
+    Return,
+
+    /// <summary>A defensive/special-teams touchdown of unknown specific type. Yahoo-only.</summary>
+    Defensive,
 }
 
 /// <summary>

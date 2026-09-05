@@ -44,6 +44,7 @@ public sealed class SimulatedLeague
 {
     public const int LeagueId = 998946988;
     public const int SeasonId = 2026;
+    public const string LeagueName = "Trelipe Takedown";
 
     private readonly object _lock = new();
     private readonly Dictionary<long, SimPlayer> _players = new();
@@ -153,7 +154,7 @@ public sealed class SimulatedLeague
                 GameId = 1,
                 SeasonId = SeasonId,
                 ScoringPeriodId = _week,
-                Settings = new EspnSettings { Name = "Trelipe Takedown" },
+                Settings = new EspnSettings { Name = LeagueName },
                 Status = new EspnStatus
                 {
                     CurrentMatchupPeriod = _week,
@@ -296,6 +297,15 @@ public sealed class SimulatedLeague
             }
 
             return result;
+        }
+    }
+
+    /// <summary>Current week's matchup pairings, for the Yahoo scoreboard emulation.</summary>
+    public IReadOnlyList<SimMatchup> GetMatchups()
+    {
+        lock (_lock)
+        {
+            return _matchups.ToList();
         }
     }
 

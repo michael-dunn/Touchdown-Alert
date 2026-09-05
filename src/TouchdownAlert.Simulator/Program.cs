@@ -32,6 +32,102 @@ app.MapGet("/apis/v3/games/ffl/seasons/{seasonId:int}/segments/0/leagues/{league
         return Results.Json(response, EspnLeagueResponse.JsonOptions);
     });
 
+// ---- Fake Yahoo OAuth2 token endpoint: accepts any code/refresh token, hands back an incrementing fake token ----
+var yahooTokenCounter = 0;
+app.MapPost("/oauth2/get_token", () =>
+{
+    var n = Interlocked.Increment(ref yahooTokenCounter);
+    return Results.Json(new
+    {
+        access_token = $"sim-token-{n}",
+        refresh_token = "sim-refresh",
+        expires_in = 3600,
+        token_type = "bearer",
+        xoauth_yahoo_guid = "sim-guid",
+    });
+});
+
+// ---- Yahoo-shaped XML endpoints over the SAME simulated league, for a two-source end-to-end test ----
+// Segments like "scoreboard;week=2" contain a literal ';', which ASP.NET routing treats as an ordinary path
+// character (no built-in matrix-parameter support), so a catch-all route parses the path by hand.
+app.MapGet("/fantasy/v2/{**path}", (HttpRequest request, string path, SimulatedLeague league) =>
+{
+    if (!request.Headers.ContainsKey("Authorization") ||
+        !request.Headers.Authorization.ToString().StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase))
+    {
+        return Results.Unauthorized();
+    }
+
+    var (segments, query) = ParseYahooPath(path);
+
+    // league/{key}
+    if (segments.Length == 2 && segments[0] == "league")
+    {
+        return XmlResult(YahooEmulation.BuildLeague(league, segments[1]));
+    }
+
+    // league/{key}/settings
+    if (segments.Length == 3 && segments[0] == "league" && segments[2] == "settings")
+    {
+        return XmlResult(YahooEmulation.BuildSettings(segments[1]));
+    }
+
+    // league/{key}/scoreboard;week=N
+    if (segments.Length == 3 && segments[0] == "league" && segments[2] == "scoreboard")
+    {
+        var week = query.TryGetValue("week", out var w) && int.TryParse(w, out var wk) ? wk : league.Week;
+        return XmlResult(YahooEmulation.BuildScoreboard(league, segments[1], week));
+    }
+
+    // team/{team_key}/roster;week=N/players/stats;type=week;week=N
+    if (segments.Length == 5 && segments[0] == "team" && segments[2] == "roster" && segments[3] == "players" && segments[4] == "stats")
+    {
+        var teamKey = segments[1];
+        var tIdx = teamKey.LastIndexOf(".t.", StringComparison.Ordinal);
+        if (tIdx < 0 || !int.TryParse(teamKey[(tIdx + 3)..], out var teamId))
+        {
+            return Results.NotFound(new { message = $"Malformed team_key '{teamKey}'." });
+        }
+
+        var leagueKey = teamKey[..tIdx];
+        try
+        {
+            return XmlResult(YahooEmulation.BuildRoster(league, leagueKey, teamId));
+        }
+        catch (KeyNotFoundException ex)
+        {
+            return Results.NotFound(new { message = ex.Message });
+        }
+    }
+
+    return Results.NotFound(new { message = $"No Yahoo emulation route for '{path}'." });
+});
+
+static (string[] Segments, Dictionary<string, string> Query) ParseYahooPath(string path)
+{
+    var segments = new List<string>();
+    var query = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+
+    foreach (var rawSegment in path.Split('/', StringSplitOptions.RemoveEmptyEntries))
+    {
+        var parts = rawSegment.Split(';');
+        segments.Add(parts[0]);
+        for (var i = 1; i < parts.Length; i++)
+        {
+            var kv = parts[i].Split('=', 2);
+            if (kv.Length == 2)
+            {
+                query[kv[0]] = kv[1];
+            }
+        }
+    }
+
+    return (segments.ToArray(), query);
+}
+
+static IResult XmlResult(System.Xml.Linq.XDocument document) =>
+    Results.Text(document.ToString(), "application/xml");
+
 // ---- Control API ----
 var sim = app.MapGroup("/sim");
 

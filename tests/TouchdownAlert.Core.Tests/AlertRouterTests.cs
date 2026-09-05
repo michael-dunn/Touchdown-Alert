@@ -20,7 +20,8 @@ public class AlertRouterTests
             Items = [new LeagueOptions { Key = "main", Provider = LeagueProvider.Espn, LeagueId = "998946988" }],
         });
         var soundResolver = new SoundFileResolver(Microsoft.Extensions.Options.Options.Create(new SoundOptions()));
-        return new AlertRouter(monitor, leaguesMonitor, soundResolver);
+        var yahooMonitor = new TestOptionsMonitor<YahooOptions>(new YahooOptions());
+        return new AlertRouter(monitor, leaguesMonitor, yahooMonitor, soundResolver);
     }
 
     private static LeagueSnapshot LoadWeek1Snapshot(LeagueRef? league = null)

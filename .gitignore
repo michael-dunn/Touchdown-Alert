@@ -10,3 +10,5 @@ appsettings.Local.json
 sounds/*
 !sounds/README.md
 !sounds/.gitkeep
+config/*
+!config/README.md

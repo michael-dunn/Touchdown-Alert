@@ -15,7 +15,13 @@ public static class LeagueConfigurationValidator
     /// found. Mutates each <see cref="WatchedTeamOptions.League"/> in place, filling in the default league key
     /// when it was null/blank and exactly one league is configured.
     /// </summary>
-    public static void ValidateAndResolve(IReadOnlyList<LeagueOptions> leagues, IReadOnlyList<WatchedTeamOptions> watchedTeams)
+    /// <param name="yahooOptions">
+    /// Required (non-null, with non-blank ClientId/ClientSecret) when any league uses the Yahoo provider.
+    /// Being logged in is deliberately NOT checked here - that's a per-poll concern
+    /// (<see cref="Yahoo.YahooAuthException"/>), not a startup failure.
+    /// </param>
+    public static void ValidateAndResolve(
+        IReadOnlyList<LeagueOptions> leagues, IReadOnlyList<WatchedTeamOptions> watchedTeams, YahooOptions? yahooOptions = null)
     {
         ArgumentNullException.ThrowIfNull(leagues);
         ArgumentNullException.ThrowIfNull(watchedTeams);
@@ -40,7 +46,12 @@ public static class LeagueConfigurationValidator
 
             if (league.Provider == LeagueProvider.Yahoo)
             {
-                throw new NotSupportedException("Yahoo leagues are not supported yet; coming soon");
+                if (string.IsNullOrWhiteSpace(yahooOptions?.ClientId) || string.IsNullOrWhiteSpace(yahooOptions?.ClientSecret))
+                {
+                    throw new InvalidOperationException(
+                        $"League \"{league.Key}\" uses the Yahoo provider but \"Yahoo:ClientId\"/\"Yahoo:ClientSecret\" are not configured. " +
+                        "Create a Yahoo developer app and put them in appsettings.Local.json.");
+                }
             }
         }
 

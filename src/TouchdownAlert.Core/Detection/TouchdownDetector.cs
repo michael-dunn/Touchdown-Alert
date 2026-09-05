@@ -202,6 +202,8 @@ public sealed class TouchdownDetector : ITouchdownDetector
         TouchdownType.FumbleReturn,
         TouchdownType.InterceptionReturn,
         TouchdownType.BlockedKickReturn,
+        TouchdownType.Return,
+        TouchdownType.Defensive,
     ];
 
     private sealed class LeagueState

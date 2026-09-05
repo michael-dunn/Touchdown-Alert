@@ -10,15 +10,22 @@ public sealed class AlertRouter : IAlertRouter
 {
     private readonly IOptionsMonitor<AlertOptions> _options;
     private readonly IOptionsMonitor<LeaguesOptions> _leaguesOptions;
+    private readonly IOptionsMonitor<YahooOptions> _yahooOptions;
     private readonly ISoundFileResolver _soundFileResolver;
 
-    public AlertRouter(IOptionsMonitor<AlertOptions> options, IOptionsMonitor<LeaguesOptions> leaguesOptions, ISoundFileResolver soundFileResolver)
+    public AlertRouter(
+        IOptionsMonitor<AlertOptions> options,
+        IOptionsMonitor<LeaguesOptions> leaguesOptions,
+        IOptionsMonitor<YahooOptions> yahooOptions,
+        ISoundFileResolver soundFileResolver)
     {
         ArgumentNullException.ThrowIfNull(options);
         ArgumentNullException.ThrowIfNull(leaguesOptions);
+        ArgumentNullException.ThrowIfNull(yahooOptions);
         ArgumentNullException.ThrowIfNull(soundFileResolver);
         _options = options;
         _leaguesOptions = leaguesOptions;
+        _yahooOptions = yahooOptions;
         _soundFileResolver = soundFileResolver;
     }
 
@@ -33,7 +40,7 @@ public sealed class AlertRouter : IAlertRouter
         {
             var watchedTeams = _options.CurrentValue.WatchedTeams;
             var leagues = _leaguesOptions.CurrentValue.Items;
-            LeagueConfigurationValidator.ValidateAndResolve(leagues, watchedTeams);
+            LeagueConfigurationValidator.ValidateAndResolve(leagues, watchedTeams, _yahooOptions.CurrentValue);
             return watchedTeams;
         }
     }
