@@ -8,5 +8,6 @@
   <Folder Name="/tests/">
     <Project Path="tests/TouchdownAlert.Core.Tests/TouchdownAlert.Core.Tests.csproj" />
     <Project Path="tests/TouchdownAlert.IntegrationTests/TouchdownAlert.IntegrationTests.csproj" />
+    <Project Path="tests/TouchdownAlert.Overlay.Tests/TouchdownAlert.Overlay.Tests.csproj" />
   </Folder>
 </Solution>

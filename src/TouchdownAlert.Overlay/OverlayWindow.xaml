@@ -1,0 +1,168 @@
+<Window x:Class="TouchdownAlert.Overlay.OverlayWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:local="clr-namespace:TouchdownAlert.Overlay"
+        Title="TouchdownAlert Overlay"
+        WindowStyle="None"
+        AllowsTransparency="True"
+        Background="Transparent"
+        ShowInTaskbar="False"
+        Topmost="True"
+        SizeToContent="WidthAndHeight"
+        ResizeMode="NoResize"
+        WindowStartupLocation="Manual">
+    <Window.Resources>
+        <local:BoolToVisibilityConverter x:Key="BoolToVis" />
+        <local:InverseBoolToVisibilityConverter x:Key="InverseBoolToVis" />
+        <local:OpacityToBrushConverter x:Key="OpacityToBrush" />
+    </Window.Resources>
+
+    <Grid>
+        <Grid.LayoutTransform>
+            <ScaleTransform x:Name="RootScale" ScaleX="1" ScaleY="1" />
+        </Grid.LayoutTransform>
+
+        <Border x:Name="RootBorder" CornerRadius="14" Padding="18"
+                Background="{Binding Settings.Opacity, Converter={StaticResource OpacityToBrush}}">
+            <StackPanel Width="420">
+
+                <!-- Caption shown only when unlocked -->
+                <Grid Visibility="{Binding Settings.Locked, Converter={StaticResource InverseBoolToVis}}"
+                      Margin="0,0,0,8"
+                      MouseLeftButtonDown="Caption_MouseLeftButtonDown">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Grid.Column="0"
+                               Text="drag to move · lock in /control to save"
+                               Foreground="#CCCCCC"
+                               FontSize="12"
+                               FontStyle="Italic"
+                               VerticalAlignment="Center" />
+                    <Border Grid.Column="1"
+                            BorderBrush="White" BorderThickness="1" CornerRadius="10"
+                            Width="20" Height="20"
+                            Background="#33000000"
+                            Cursor="Hand"
+                            MouseLeftButtonDown="CloseButton_MouseLeftButtonDown">
+                        <TextBlock Text="x" Foreground="White" FontSize="12" FontWeight="Bold"
+                                   HorizontalAlignment="Center" VerticalAlignment="Center" />
+                    </Border>
+                </Grid>
+
+                <!-- Team rows -->
+                <ItemsControl ItemsSource="{Binding Rows}">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate>
+                            <DataTemplate.Triggers>
+                                <DataTrigger Binding="{Binding IsPulsing}" Value="True">
+                                    <DataTrigger.EnterActions>
+                                        <BeginStoryboard x:Name="PulseStoryboard">
+                                            <Storyboard>
+                                                <DoubleAnimation Storyboard.TargetName="RowHighlight"
+                                                                 Storyboard.TargetProperty="Opacity"
+                                                                 From="0.15" To="0.55" Duration="0:0:0.35"
+                                                                 AutoReverse="True" RepeatBehavior="Forever" />
+                                            </Storyboard>
+                                        </BeginStoryboard>
+                                    </DataTrigger.EnterActions>
+                                    <DataTrigger.ExitActions>
+                                        <StopStoryboard BeginStoryboardName="PulseStoryboard" />
+                                    </DataTrigger.ExitActions>
+                                </DataTrigger>
+                            </DataTemplate.Triggers>
+                            <Grid Margin="0,3">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="8" />
+                                    <ColumnDefinition Width="10" />
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+
+                                <Border x:Name="RowHighlight" Grid.Column="0" Grid.ColumnSpan="4"
+                                        Background="White" Opacity="0" CornerRadius="6" />
+
+                                <Rectangle Grid.Column="0" Width="8" RadiusX="3" RadiusY="3"
+                                           Fill="{Binding Color}" VerticalAlignment="Stretch" />
+
+                                <TextBlock Grid.Column="2" Text="{Binding Label}"
+                                           Foreground="White" FontSize="20" FontWeight="SemiBold"
+                                           VerticalAlignment="Center" Margin="4,0,12,0" />
+
+                                <StackPanel Grid.Column="3" Orientation="Horizontal" VerticalAlignment="Center">
+                                    <TextBlock Text="{Binding PointsText}" Foreground="White"
+                                               FontSize="34" FontWeight="Bold" />
+                                    <TextBlock Text=" (" Foreground="#BBFFFFFF" FontSize="20" VerticalAlignment="Bottom" Margin="4,0,0,3"/>
+                                    <TextBlock Text="{Binding TouchdownTotal}" Foreground="#BBFFFFFF" FontSize="20" VerticalAlignment="Bottom" Margin="0,0,0,3"/>
+                                    <TextBlock Text=")" Foreground="#BBFFFFFF" FontSize="20" VerticalAlignment="Bottom" Margin="0,0,0,3"/>
+                                </StackPanel>
+                            </Grid>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+
+                <!-- TD banner strip -->
+                <Border x:Name="BannerBorder" Height="0" ClipToBounds="True" Margin="0,6,0,0"
+                        CornerRadius="8" Padding="10,0">
+                    <Border.Style>
+                        <Style TargetType="Border">
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding BannerVisible}" Value="True">
+                                    <DataTrigger.EnterActions>
+                                        <BeginStoryboard>
+                                            <Storyboard>
+                                                <DoubleAnimation Storyboard.TargetProperty="Height"
+                                                                 To="64" Duration="0:0:0.2" />
+                                            </Storyboard>
+                                        </BeginStoryboard>
+                                    </DataTrigger.EnterActions>
+                                    <DataTrigger.ExitActions>
+                                        <BeginStoryboard>
+                                            <Storyboard>
+                                                <DoubleAnimation Storyboard.TargetProperty="Height"
+                                                                 To="0" Duration="0:0:0.2" />
+                                            </Storyboard>
+                                        </BeginStoryboard>
+                                    </DataTrigger.ExitActions>
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </Border.Style>
+                    <Border.Background>
+                        <SolidColorBrush Color="{Binding CurrentBanner.Color}" Opacity="0.85" />
+                    </Border.Background>
+                    <Grid VerticalAlignment="Center">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Grid.Column="0" Text="{Binding CurrentBanner.DisplayText}"
+                                   Foreground="White" FontSize="22" FontWeight="Bold"
+                                   TextWrapping="NoWrap" TextTrimming="CharacterEllipsis"
+                                   VerticalAlignment="Center" />
+                        <Border Grid.Column="1"
+                                Visibility="{Binding CurrentBanner.IsTest, Converter={StaticResource BoolToVis}}"
+                                Background="#33000000" CornerRadius="4" Padding="6,2" Margin="8,0,0,0">
+                            <TextBlock Text="TEST" Foreground="White" FontSize="12" FontWeight="Bold" />
+                        </Border>
+                    </Grid>
+                </Border>
+
+                <!-- Offline pill -->
+                <Border Visibility="{Binding IsOffline, Converter={StaticResource BoolToVis}}"
+                        HorizontalAlignment="Right" Margin="0,6,0,0"
+                        Background="#66808080" CornerRadius="8" Padding="8,2">
+                    <TextBlock Text="offline" Foreground="White" FontSize="11" />
+                </Border>
+
+            </StackPanel>
+        </Border>
+
+        <!-- Dashed border shown only when unlocked, drawn over everything -->
+        <Rectangle IsHitTestVisible="False"
+                   Visibility="{Binding Settings.Locked, Converter={StaticResource InverseBoolToVis}}"
+                   RadiusX="14" RadiusY="14"
+                   Stroke="White" StrokeThickness="2" StrokeDashArray="4 3" />
+    </Grid>
+</Window>
