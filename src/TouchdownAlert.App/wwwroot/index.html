@@ -8,31 +8,33 @@
 </head>
 <body>
   <header class="topbar">
-    <div class="topbar-row">
-      <h1>TouchdownAlert<span id="league-name" class="league-name"></span></h1>
-      <div class="conn">
-        <span id="conn-dot" class="dot dot-off"></span>
-        <span id="conn-text">connecting...</span>
-      </div>
-    </div>
-    <div class="topbar-row meta">
-      <span id="week-label">Week --</span>
-      <span id="poll-info">--</span>
-      <div class="actions">
-        <button id="btn-poll">Poll now</button>
-        <button id="btn-reset">Re-seed detector</button>
-      </div>
-    </div>
     <div id="league-chips" class="league-chips"></div>
-    <div id="error-banner" class="error-banner" hidden></div>
+    <div class="live-status">
+      <span id="live-error" class="live-error"></span>
+      <span id="live-updated" class="live-updated"></span>
+      <span id="live-dot" class="live-dot live-dot-off"></span>
+    </div>
   </header>
 
-  <main>
-    <section id="teams" class="teams-grid"></section>
+  <div id="td-banner" class="td-banner" hidden>
+    <span id="td-banner-text" class="td-banner-text"></span>
+    <span id="td-banner-test" class="td-banner-test" hidden>TEST</span>
+  </div>
 
-    <section class="alerts-panel">
-      <h2>Alert log</h2>
-      <ul id="alert-log" class="alert-log"></ul>
+  <main>
+    <section id="tiles" class="tiles-grid"></section>
+
+    <section class="audit-panel">
+      <table class="audit-table">
+        <thead>
+          <tr>
+            <th class="col-time">Time</th>
+            <th class="col-team">Team</th>
+            <th class="col-player">Player</th>
+          </tr>
+        </thead>
+        <tbody id="audit-body"></tbody>
+      </table>
     </section>
   </main>
 
