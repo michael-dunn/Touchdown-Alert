@@ -119,4 +119,11 @@ public sealed class YahooOptions
 
     /// <summary>Yahoo's "out of band" redirect for apps that can't host a callback URL.</summary>
     public string RedirectUri { get; set; } = "oob";
+
+    /// <summary>
+    /// OAuth scope requested at login. "fspt-r" is Fantasy Sports read access; the developer app must also have
+    /// the Fantasy Sports permission enabled or Yahoo answers every fantasy call with
+    /// "additional_authorization_required". Blank to omit the parameter.
+    /// </summary>
+    public string Scope { get; set; } = "fspt-r";
 }

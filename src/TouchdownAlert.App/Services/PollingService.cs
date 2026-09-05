@@ -144,7 +144,9 @@ public sealed class PollingService : BackgroundService
         }
         catch (Exception ex)
         {
-            _logger.LogWarning(ex, "Poll failed for league {League}: {Message}", source.League.Key, ex.Message);
+            // One line at Warning (the message already says what went wrong); the stack trace only at Debug.
+            _logger.LogWarning("Poll failed for league {League}: {Message}", source.League.Key, ex.Message);
+            _logger.LogDebug(ex, "Poll failure detail for league {League}", source.League.Key);
             _state.RecordError(source.League.Key, ex.Message);
             return (false, ex.Message);
         }

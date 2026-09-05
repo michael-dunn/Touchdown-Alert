@@ -75,6 +75,11 @@ public sealed class YahooAuthService : IYahooAuthService
         var url = $"{baseUrl}?client_id={Uri.EscapeDataString(options.ClientId)}" +
                   $"&redirect_uri={Uri.EscapeDataString(options.RedirectUri)}" +
                   "&response_type=code&language=en-us";
+        if (!string.IsNullOrWhiteSpace(options.Scope))
+        {
+            url += $"&scope={Uri.EscapeDataString(options.Scope)}";
+        }
+
         return new Uri(url);
     }
 
