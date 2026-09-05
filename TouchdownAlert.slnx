@@ -2,6 +2,7 @@
   <Folder Name="/src/">
     <Project Path="src/TouchdownAlert.App/TouchdownAlert.App.csproj" />
     <Project Path="src/TouchdownAlert.Core/TouchdownAlert.Core.csproj" />
+    <Project Path="src/TouchdownAlert.Overlay/TouchdownAlert.Overlay.csproj" />
     <Project Path="src/TouchdownAlert.Simulator/TouchdownAlert.Simulator.csproj" />
   </Folder>
   <Folder Name="/tests/">

@@ -17,7 +17,9 @@ public sealed record PollHealthViewModel(
     DateTimeOffset? LastPollAt,
     DateTimeOffset? NextPollAt,
     string? LastError,
-    long PollCount);
+    long PollCount,
+    /// <summary>Configured poll interval, so clients can judge staleness (older than two intervals = stale).</summary>
+    int IntervalSeconds);
 
 /// <summary>One configured league's status, for the dashboard's per-league chip.</summary>
 public sealed record LeagueViewModel(
@@ -45,8 +47,12 @@ public sealed record WatchedTeamViewModel(
     string LeagueKey,
     string LeagueName,
     string Label,
+    /// <summary>Resolved CSS hex color (configured or palette default). Never null.</summary>
+    string Color,
     string? EspnTeamName,
     double? Points,
+    /// <summary>Sum of touchdown counters across the team's current starters this week (the "(8)" on the tile).</summary>
+    int TouchdownTotal,
     OpponentViewModel? Opponent,
     string SoundFile,
     bool SoundFound,

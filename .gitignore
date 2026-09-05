@@ -12,3 +12,4 @@ sounds/*
 !sounds/.gitkeep
 config/*
 !config/README.md
+!config/settings.example.json

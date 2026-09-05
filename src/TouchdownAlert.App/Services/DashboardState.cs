@@ -19,17 +19,37 @@ public sealed class DashboardState
     private readonly IAlertRouter _alertRouter;
     private readonly IOptionsMonitor<LeaguesOptions> _leaguesOptions;
     private readonly ISoundFileResolver _soundResolver;
+    private readonly IOptionsMonitor<PollingOptions> _pollingOptions;
 
     private readonly Dictionary<string, LeagueRuntimeState> _leagues = new(StringComparer.OrdinalIgnoreCase);
     private DateTimeOffset? _nextPollAt;
     private long _pollCount;
     private readonly List<AlertLogEntryViewModel> _alertLog = new();
 
-    public DashboardState(IAlertRouter alertRouter, IOptionsMonitor<LeaguesOptions> leaguesOptions, ISoundFileResolver soundResolver)
+    /// <summary>Default team colors by position in the watched list, used when a team has no configured Color.</summary>
+    public static readonly IReadOnlyList<string> DefaultPalette = new[]
+    {
+        "#22c55e", // green
+        "#3b82f6", // blue
+        "#f59e0b", // amber
+        "#ec4899", // pink
+        "#a855f7", // purple
+        "#14b8a6", // teal
+    };
+
+    public static string ResolveColor(WatchedTeamOptions team, int index) =>
+        !string.IsNullOrWhiteSpace(team.Color) ? team.Color.Trim() : DefaultPalette[index % DefaultPalette.Count];
+
+    public DashboardState(
+        IAlertRouter alertRouter,
+        IOptionsMonitor<LeaguesOptions> leaguesOptions,
+        ISoundFileResolver soundResolver,
+        IOptionsMonitor<PollingOptions> pollingOptions)
     {
         _alertRouter = alertRouter;
         _leaguesOptions = leaguesOptions;
         _soundResolver = soundResolver;
+        _pollingOptions = pollingOptions;
     }
 
     /// <summary>Last successfully fetched snapshot for the given league, if any. Used by the test-alert endpoint.</summary>
@@ -153,7 +173,7 @@ public sealed class DashboardState
             var lastPollAt = leagueViewModels.Select(l => l.LastPollAt).Where(t => t.HasValue).Select(t => t!.Value).DefaultIfEmpty().Max();
 
             var watchedTeams = _alertRouter.WatchedTeams
-                .Select(BuildTeamViewModel)
+                .Select((team, index) => BuildTeamViewModel(team, ResolveColor(team, index)))
                 .ToList();
 
             var poll = new PollHealthViewModel(
@@ -161,7 +181,8 @@ public sealed class DashboardState
                 LastPollAt: lastPollAt == default ? null : lastPollAt,
                 NextPollAt: _nextPollAt,
                 LastError: firstError,
-                PollCount: _pollCount);
+                PollCount: _pollCount,
+                IntervalSeconds: _pollingOptions.CurrentValue.IntervalSeconds);
 
             return new DashboardViewModel(
                 LeagueName: first?.Name,
@@ -187,7 +208,7 @@ public sealed class DashboardState
         return state;
     }
 
-    private WatchedTeamViewModel BuildTeamViewModel(WatchedTeamOptions watched)
+    private WatchedTeamViewModel BuildTeamViewModel(WatchedTeamOptions watched, string color)
     {
         var leagueKey = watched.League ?? "";
         var snapshot = _leagues.GetValueOrDefault(leagueKey)?.Snapshot;
@@ -204,8 +225,10 @@ public sealed class DashboardState
                 leagueKey,
                 leagueName,
                 label,
+                color,
                 EspnTeamName: null,
                 Points: null,
+                TouchdownTotal: 0,
                 Opponent: null,
                 SoundFile: watched.SoundFile,
                 SoundFound: resolvedPath is not null,
@@ -233,8 +256,10 @@ public sealed class DashboardState
             leagueKey,
             leagueName,
             label,
+            color,
             EspnTeamName: team.Name,
             Points: team.Points,
+            TouchdownTotal: starters.Sum(p => p.TouchdownTotal),
             Opponent: opponent,
             SoundFile: watched.SoundFile,
             SoundFound: resolvedPath is not null,

@@ -1,0 +1,36 @@
+{
+  "Leagues": [
+    {
+      "Key": "main",
+      "Provider": "Espn",
+      "LeagueId": "12345678"
+    }
+  ],
+  "Alerts": {
+    "WatchedTeams": [
+      {
+        "TeamId": 1,
+        "League": "main",
+        "Label": "Me",
+        "SoundFile": "airhorn.mp3",
+        "Color": "#22c55e"
+      }
+    ]
+  },
+  "Polling": {
+    "IntervalSeconds": 30
+  },
+  "Sounds": {
+    "Volume": 1,
+    "MaxDurationSeconds": 5
+  },
+  "Overlay": {
+    "X": null,
+    "Y": null,
+    "Display": "primary",
+    "Scale": 1,
+    "Opacity": 0.7,
+    "Locked": true,
+    "Enabled": true
+  }
+}

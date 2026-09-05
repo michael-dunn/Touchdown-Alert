@@ -55,6 +55,39 @@ public sealed class WatchedTeamOptions
 
     /// <summary>Sound file name (relative to Sounds:Directory) or absolute path. mp3 or wav.</summary>
     public string SoundFile { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Team color as a CSS hex string (e.g. "#22c55e"), used on the dashboard tile, overlay row and TD banner.
+    /// Blank = a default from a built-in palette, chosen by the team's position in the list.
+    /// </summary>
+    public string? Color { get; set; }
+}
+
+/// <summary>Position and look of the always-on-top TV overlay. Written by the control page and the overlay itself.</summary>
+public sealed class OverlayOptions
+{
+    public const string SectionName = "Overlay";
+
+    /// <summary>Left edge in screen pixels. Null = default placement (top-right of <see cref="Display"/>).</summary>
+    public double? X { get; set; }
+
+    /// <summary>Top edge in screen pixels. Null = default placement.</summary>
+    public double? Y { get; set; }
+
+    /// <summary>Which display hosts the overlay: "primary" (the TV in the agreed setup), "secondary", or a zero-based index.</summary>
+    public string Display { get; set; } = "primary";
+
+    /// <summary>Size multiplier, 0.5 - 2.0.</summary>
+    public double Scale { get; set; } = 1.0;
+
+    /// <summary>Background opacity, 0.0 - 1.0.</summary>
+    public double Opacity { get; set; } = 0.7;
+
+    /// <summary>Locked = click-through and not draggable. Unlock from the control page to reposition.</summary>
+    public bool Locked { get; set; } = true;
+
+    /// <summary>Whether the overlay window should be shown at all.</summary>
+    public bool Enabled { get; set; } = true;
 }
 
 public sealed class SoundOptions
