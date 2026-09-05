@@ -32,8 +32,6 @@ public interface IYahooTokenStore
 /// </summary>
 public sealed class YahooTokenStore : IYahooTokenStore
 {
-    private const string SolutionFileName = "TouchdownAlert.slnx";
-
     private static readonly JsonSerializerOptions JsonOptions = new() { WriteIndented = true };
 
     private readonly object _lock = new();
@@ -105,31 +103,6 @@ public sealed class YahooTokenStore : IYahooTokenStore
             configuredPath = "config/yahoo-token.json";
         }
 
-        if (Path.IsPathRooted(configuredPath))
-        {
-            return configuredPath;
-        }
-
-        var repoRoot = FindAncestorContaining(AppContext.BaseDirectory, SolutionFileName)
-            ?? FindAncestorContaining(Directory.GetCurrentDirectory(), SolutionFileName);
-
-        var baseDir = repoRoot ?? Directory.GetCurrentDirectory();
-        return Path.Combine(baseDir, configuredPath);
-    }
-
-    private static string? FindAncestorContaining(string startDirectory, string fileName)
-    {
-        var dir = new DirectoryInfo(startDirectory);
-        while (dir is not null)
-        {
-            if (File.Exists(Path.Combine(dir.FullName, fileName)))
-            {
-                return dir.FullName;
-            }
-
-            dir = dir.Parent;
-        }
-
-        return null;
+        return RepoPaths.Resolve(configuredPath);
     }
 }

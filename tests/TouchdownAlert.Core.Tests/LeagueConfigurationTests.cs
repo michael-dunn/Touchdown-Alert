@@ -103,8 +103,16 @@ public class LeagueConfigurationTests
     }
 
     [Fact]
-    public void ValidateAndResolve_NoLeaguesConfigured_Throws()
+    public void ValidateAndResolve_NoLeaguesConfigured_NoWatchedTeams_Passes()
     {
-        Assert.Throws<InvalidOperationException>(() => LeagueConfigurationValidator.ValidateAndResolve([], []));
+        // Zero leagues is a valid startup state (fresh install before the control page adds any).
+        LeagueConfigurationValidator.ValidateAndResolve([], []);
+    }
+
+    [Fact]
+    public void ValidateAndResolve_NoLeaguesConfigured_WithWatchedTeam_Throws()
+    {
+        var watched = new List<WatchedTeamOptions> { new() { TeamId = 1, League = null, SoundFile = "a.mp3" } };
+        Assert.Throws<InvalidOperationException>(() => LeagueConfigurationValidator.ValidateAndResolve([], watched));
     }
 }

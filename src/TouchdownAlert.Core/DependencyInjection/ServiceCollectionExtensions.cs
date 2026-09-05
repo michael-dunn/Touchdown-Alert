@@ -31,6 +31,7 @@ public static class ServiceCollectionExtensions
         services.AddOptions<SoundOptions>().Bind(configuration.GetSection(SoundOptions.SectionName));
         services.AddOptions<AlertOptions>().Bind(configuration.GetSection(AlertOptions.SectionName));
         services.AddOptions<YahooOptions>().Bind(configuration.GetSection(YahooOptions.SectionName));
+        services.Configure<OverlayOptions>(configuration.GetSection(OverlayOptions.SectionName));
 
         services.AddSingleton(TimeProvider.System);
 

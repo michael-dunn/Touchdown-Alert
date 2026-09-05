@@ -23,15 +23,32 @@ tests/
 sounds/                       Your alert sound files (git-ignored except sounds/README.md)
 ```
 
+## Control page
+
+Leagues, watched teams, polling interval, sound volume/clip length, and the TV overlay's
+position/look are all edited from the control page at **http://localhost:5055/control** —
+not `appsettings.json`. It's a settings editor plus test tools (poll now, re-seed detector,
+restart, per-team "test sound", and the detailed starters/bench lineups that used to live on
+the dashboard). Team and sound pickers are populated from the last poll and the `sounds/`
+folder, so there's no free-text league/team typing once a league has been polled once.
+
+Most edits (teams, colors, sounds, order, polling interval, sound volume/duration, overlay)
+apply live, no restart needed. Adding/removing a league, or changing a league's provider or
+league id, needs a restart to take effect — the control page shows a banner and a **Restart**
+button when that's the case (`POST /api/restart`).
+
+Under the hood, everything the control page edits lives in **`config/settings.json`** (git-ignored;
+`config/settings.example.json` is the committed template, copied with empty leagues/teams the
+first time the app runs without one). `appsettings.json` only keeps `Urls`, the Yahoo
+`ClientId`/`ClientSecret` placeholder, `Sounds:Directory`/`Enabled`, and logging — it's no longer
+where `Leagues` or `Alerts:WatchedTeams` live. If you'd rather hand-edit the file directly, it has
+the same shape described below; the control page just picks up the change (it's read live).
+
 ## Configuring watched teams and sounds
 
-Edit `src/TouchdownAlert.App/appsettings.json` (or, better, create a git-ignored
-`src/TouchdownAlert.App/appsettings.Local.json` with just the parts you want to
-override — it's loaded after `appsettings.json` so you can keep your league id,
-team ids, and sound choices out of the repo).
-
 Drop `.mp3` or `.wav` files into the `sounds/` folder at the repo root and
-reference them by file name:
+reference them by file name. Everything below can be edited from the control page
+(http://localhost:5055/control) or by hand in `config/settings.json`:
 
 ```json
 {
@@ -98,16 +115,18 @@ non-private leagues), so there's a one-time setup step:
 1. Create a Yahoo developer app at https://developer.yahoo.com/apps/create/ - Fantasy Sports,
    **read** permission is enough. Set the redirect URI to `oob` (out of band - Yahoo shows you a
    code to copy instead of redirecting to a URL).
-2. Put the app's Client ID/Secret in a git-ignored `src/TouchdownAlert.App/appsettings.Local.json`:
+2. Put the app's Client ID/Secret in a git-ignored `src/TouchdownAlert.App/appsettings.Local.json`
+   (credentials only — leagues still live in `config/settings.json`, edited from the control page
+   or by hand):
 
    ```json
-   {
-     "Yahoo": { "ClientId": "your-client-id", "ClientSecret": "your-client-secret" },
-     "Leagues": [
-       { "Key": "main", "Provider": "Espn", "LeagueId": "12345678" },
-       { "Key": "yahoo", "Provider": "Yahoo", "LeagueId": "123456" }
-     ]
-   }
+   { "Yahoo": { "ClientId": "your-client-id", "ClientSecret": "your-client-secret" } }
+   ```
+
+   Then add the Yahoo league itself from the control page, or directly in `config/settings.json`:
+
+   ```json
+   { "Key": "yahoo", "Provider": "Yahoo", "LeagueId": "123456" }
    ```
 
    `LeagueId` can be a bare numeric league id (assumed to be in the `nfl` game for the current
@@ -195,6 +214,52 @@ Full control API and details: `src/TouchdownAlert.Simulator/README.md`.
 - `POST /api/detector/reset/{leagueKey}` — reset the touchdown detector for one league
 - `POST /api/test/{leagueKey}/{teamId}` — fire a test alert for a watched team in that league (400 if not watched)
 - `POST /api/test/{teamId}` — legacy form; works when the team id is unambiguous across all watched teams (400 if not watched, or if watched in more than one league)
+- `GET /api/settings` — the settings document (leagues, watched teams, polling, sounds, overlay) plus
+  `meta` (restart-required flag, settings file path, sounds directory, available sound files, per-league
+  team names from the last poll, Yahoo configured/logged-in status) — what the control page and the
+  overlay exe read on load
+- `PUT /api/settings` — replace the whole document (everything `GET` returns except `meta`); `400 { errors }`
+  on validation failure, otherwise `200 { ok, restartRequired }` and `config/settings.json` is rewritten
+- `PUT /api/settings/overlay` — replace just the overlay section (used by the overlay exe to save a
+  dragged position, and by the control page's lock/scale/opacity controls); `200 { ok, overlay }`
+- `POST /api/restart` — `202`, then restarts the process (relaunches the built exe; under `dotnet run`
+  it just stops — restart it yourself)
 
-SignalR hub is at `/hub`; it pushes a `state` event after every poll and an
+SignalR hub is at `/hub`; it pushes a `state` event after every poll, a `settings` event whenever
+`config/settings.json` changes (live-reloadable parts only — league changes need a restart), and an
 `alert` event whenever an alert fires.
+
+## TV overlay and game day
+
+`src/TouchdownAlert.Overlay` is a small always-on-top WPF overlay for the agreed couch setup: a
+55" TV as Windows' primary display (playing the game full screen in a browser) and a laptop as the
+secondary display. The overlay sits on top of the game video, top-right by default, showing a row per
+watched team (color bar, name, score, TD count) and a 5-second banner strip for each touchdown as it
+comes in (queued in arrival order when more than one fires close together). It connects to the App's
+SignalR hub (`{appUrl}/hub`) and reconnects forever with backoff if the App restarts mid-game; while
+disconnected it shows a small "offline" pill instead of disappearing.
+
+Locked (the default) it's click-through and can't be dragged - it just floats over the video. Unlock
+it from the control page (`overlay.locked = false` in settings) to drag it into place; dragging saves
+the new position back to the App via `PUT /api/settings/overlay`. Scale, opacity, which display it's
+on, and enabled/disabled all apply live as settings change. It logs to
+`%LOCALAPPDATA%\TouchdownAlert\overlay.log` since it has no console.
+
+Run it directly with `TouchdownAlert.Overlay.exe --app http://localhost:5055` (defaults to that URL
+if `--app` is omitted), or use the game-day scripts below, which also handle the App and the dashboard:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts\start-gameday.ps1
+```
+
+or just double-click **`scripts\Start Game Day.bat`** (pin it to the desktop/taskbar for one click).
+It starts the App (if `/api/health` isn't already answering), starts the overlay (unless already
+running), and opens the web dashboard full-screen on the secondary display in Edge app mode. Flags:
+`-NoDashboard`, `-NoOverlay`, `-AppUrl <url>`. To stop the App and overlay (never the browser, never
+the game stream):
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts\stop-gameday.ps1
+```
+
+See `scripts/README.md` for details.

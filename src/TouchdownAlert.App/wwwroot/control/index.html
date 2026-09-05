@@ -1,0 +1,136 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>TouchdownAlert - Control</title>
+  <link rel="stylesheet" href="control.css" />
+</head>
+<body>
+  <header class="topbar">
+    <div class="topbar-row">
+      <h1>TouchdownAlert <span class="subtitle">control</span></h1>
+      <div class="conn">
+        <span id="live-dot" class="dot dot-off"></span>
+        <span id="live-text">connecting...</span>
+      </div>
+      <div class="actions">
+        <button id="btn-poll" type="button">Poll now</button>
+        <button id="btn-reseed" type="button">Re-seed detector</button>
+        <button id="btn-restart" type="button" class="danger">Restart app</button>
+        <a href="/" target="_blank" rel="noopener"><button type="button">Open dashboard</button></a>
+        <a href="#overlay-section"><button type="button">Overlay settings</button></a>
+      </div>
+    </div>
+    <div id="restart-banner" class="banner banner-warn" hidden>
+      Restart required to apply league changes. <button id="btn-restart-2" type="button">Restart now</button>
+    </div>
+    <div id="league-chips" class="league-chips"></div>
+  </header>
+
+  <main>
+    <section class="panel">
+      <h2>Leagues</h2>
+      <table class="editable-table" id="leagues-table">
+        <thead>
+          <tr>
+            <th>Key</th>
+            <th>Provider</th>
+            <th>League id</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody id="leagues-body"></tbody>
+      </table>
+      <button id="btn-add-league" type="button">Add league</button>
+      <div id="yahoo-hint" class="hint" hidden>
+        Yahoo leagues need a one-time login: <a href="/setup/yahoo" target="_blank" rel="noopener">/setup/yahoo</a>
+        - <span id="yahoo-status"></span>
+      </div>
+      <details class="advanced">
+        <summary>Advanced (base URL, season, week)</summary>
+        <p class="hint">Edit these directly in config/settings.json if you need them; the picker above covers the common case.</p>
+      </details>
+    </section>
+
+    <section class="panel">
+      <h2>Watched teams <span class="hint">(up to 4)</span></h2>
+      <div id="teams-list" class="teams-list"></div>
+      <button id="btn-add-team" type="button">Add team</button>
+    </section>
+
+    <section class="panel">
+      <h2>Polling &amp; sounds</h2>
+      <div class="field-row">
+        <label for="polling-interval">Poll interval (seconds)</label>
+        <input id="polling-interval" type="number" min="5" max="600" step="1" />
+      </div>
+      <div class="field-row">
+        <label for="sounds-volume">Volume</label>
+        <input id="sounds-volume" type="range" min="0" max="1" step="0.01" />
+        <span id="sounds-volume-value" class="value-readout"></span>
+      </div>
+      <div class="field-row">
+        <label for="sounds-max-duration">Max clip length (seconds, 0 = full)</label>
+        <input id="sounds-max-duration" type="number" min="0" max="60" step="1" />
+      </div>
+    </section>
+
+    <section class="panel" id="overlay-section">
+      <h2>Overlay</h2>
+      <div class="field-row">
+        <label for="overlay-enabled">Enabled</label>
+        <input id="overlay-enabled" type="checkbox" />
+      </div>
+      <div class="field-row">
+        <label for="overlay-locked">Locked <span class="hint">(unlock to drag on the TV; lock again to save)</span></label>
+        <input id="overlay-locked" type="checkbox" />
+      </div>
+      <div class="field-row">
+        <label for="overlay-scale">Scale</label>
+        <input id="overlay-scale" type="range" min="50" max="200" step="1" />
+        <span id="overlay-scale-value" class="value-readout"></span>
+      </div>
+      <div class="field-row">
+        <label for="overlay-opacity">Opacity</label>
+        <input id="overlay-opacity" type="range" min="0" max="100" step="1" />
+        <span id="overlay-opacity-value" class="value-readout"></span>
+      </div>
+      <div class="field-row">
+        <label for="overlay-display">Display</label>
+        <select id="overlay-display">
+          <option value="primary">Primary</option>
+          <option value="secondary">Secondary</option>
+          <option value="0">Index 0</option>
+          <option value="1">Index 1</option>
+          <option value="2">Index 2</option>
+        </select>
+      </div>
+      <div class="field-row">
+        <span class="hint">Position: <span id="overlay-position">default</span></span>
+        <button id="btn-overlay-reset" type="button">Reset position</button>
+      </div>
+    </section>
+
+    <section class="panel">
+      <details class="advanced" open>
+        <summary>Lineups</summary>
+        <div id="lineups"></div>
+      </details>
+    </section>
+  </main>
+
+  <div id="save-bar" class="save-bar">
+    <div id="save-errors" class="save-errors" hidden></div>
+    <div id="save-toast" class="save-toast" hidden></div>
+    <div class="save-bar-buttons">
+      <button id="btn-discard" type="button">Discard changes</button>
+      <button id="btn-save" type="button" class="primary">Save settings</button>
+    </div>
+  </div>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/microsoft-signalr/8.0.7/signalr.min.js"
+          onerror="window.__signalrFailed = true"></script>
+  <script src="control.js"></script>
+</body>
+</html>

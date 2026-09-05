@@ -26,11 +26,8 @@ public static class LeagueConfigurationValidator
         ArgumentNullException.ThrowIfNull(leagues);
         ArgumentNullException.ThrowIfNull(watchedTeams);
 
-        if (leagues.Count == 0)
-        {
-            throw new InvalidOperationException("At least one league must be configured under \"Leagues\".");
-        }
-
+        // Zero leagues is valid: the app starts with an empty dashboard until leagues are added from the
+        // control page. Watched teams still can't resolve against zero leagues (checked below).
         var seenKeys = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         foreach (var league in leagues)
         {

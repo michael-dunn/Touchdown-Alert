@@ -61,6 +61,28 @@ public sealed class DashboardState
         }
     }
 
+    /// <summary>
+    /// The last snapshot's teams (id + name) for every league that has one, keyed by league key. Used by the
+    /// settings API's <c>meta.leagueTeams</c> so the control page can offer team pickers by name. A league that
+    /// hasn't been polled yet (or has no snapshot) is simply omitted.
+    /// </summary>
+    public IReadOnlyDictionary<string, IReadOnlyList<(int TeamId, string Name)>> GetAllLeagueTeams()
+    {
+        lock (_lock)
+        {
+            var result = new Dictionary<string, IReadOnlyList<(int TeamId, string Name)>>(StringComparer.OrdinalIgnoreCase);
+            foreach (var (key, state) in _leagues)
+            {
+                if (state.Snapshot is not null)
+                {
+                    result[key] = state.Snapshot.Teams.Select(t => (t.TeamId, t.Name)).ToList();
+                }
+            }
+
+            return result;
+        }
+    }
+
     public void RecordSnapshot(LeagueSnapshot snapshot, DateTimeOffset pollTime, bool detectorSeeded)
     {
         lock (_lock)
