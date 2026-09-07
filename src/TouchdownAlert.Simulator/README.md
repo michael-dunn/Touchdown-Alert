@@ -130,6 +130,32 @@ dotnet run --project src/TouchdownAlert.App -- `
 Then log in at http://localhost:5055/setup/yahoo (any pasted code works - the simulator's token
 endpoint accepts anything) and the "yahoo" league starts polling the simulator too.
 
+## Sleeper emulation
+
+The same league is also served as Sleeper-shaped JSON (same routes as `https://api.sleeper.app`, no auth,
+league id `998946988` as a string - any other id is a 404):
+
+| Method | Path | Notes |
+|---|---|---|
+| GET  | `/v1/state/nfl` | `week`/`display_week` = current sim week, `season` = `"2026"` (a string, as on Sleeper) |
+| GET  | `/v1/league/998946988` | Name, `settings.num_teams`, `roster_positions` (`QB RB RB WR WR TE FLEX DEF K BN BN BN BN`), TD `scoring_settings` |
+| GET  | `/v1/league/998946988/users` | One per team; `user_id` = `"100000000000000" + teamId`, `metadata.team_name` = team name. Team 10's `metadata` is `null` so the display_name fallback gets exercised |
+| GET  | `/v1/league/998946988/rosters` | `roster_id` = team id (1-10), `players`/`starters` as id strings, starters in `roster_positions` order |
+| GET  | `/v1/league/998946988/matchups/{week}` | Per team: `matchup_id`, `points`, `players_points`, `starters_points`. `{week}` is ignored (single-period sim) |
+| GET  | `/v1/stats/nfl/regular/{season}/{week}` | `{ "<player_id>": { stats } }` with Sleeper keys (`pass_td`, `rush_td`, `rec_td`, `st_td` + `kr_td`/`pr_td`/`blk_kick_ret_td`, `fum_rec_td`, `idp_def_td`; DEF rows use `def_td`/`def_st_td`). Also emits the decoys `anytime_tds` and, on every DEF row, `"td": 3` (touchdowns *allowed* on real Sleeper) which a parser must ignore. Offensive players with nothing to report are omitted; `{season}`/`{week}` are ignored |
+| GET  | `/v1/players/nfl` | Trimmed player dictionary for every simulated player |
+
+Player ids are the ESPN numeric ids as strings (`"3918298"`); D/ST units use the NFL abbreviation as their id
+(`"BAL"`, `"MIA"`, `"BUF"`, ...) with `position: "DEF"` and `first_name`/`last_name` = city/nickname
+("Baltimore" / "Ravens"). Offensive players' `team` is `null` because the sim's invented proTeamIds (100+) are
+not real NFL teams - only Josh Allen (`BUF`) has one.
+
+```powershell
+dotnet run --project src/TouchdownAlert.App -- `
+  --Leagues:1:Key=sleeper --Leagues:1:Provider=Sleeper --Leagues:1:LeagueId=998946988 `
+  --Leagues:1:BaseUrl=http://localhost:5199
+```
+
 ## Notes on the simulated data
 
 - Teams/ids/names come from `fixtures/league-2026-preseason.json` (10 teams, ids 1-10). Week-1 matchup
