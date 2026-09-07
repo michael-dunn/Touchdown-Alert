@@ -102,6 +102,7 @@
           <select class="league-provider">
             <option value="Espn" ${league.provider === "Espn" ? "selected" : ""}>Espn</option>
             <option value="Yahoo" ${league.provider === "Yahoo" ? "selected" : ""}>Yahoo</option>
+            <option value="Sleeper" ${league.provider === "Sleeper" ? "selected" : ""}>Sleeper</option>
           </select>
         </td>
         <td><input type="text" class="league-id" value="${escapeAttr(league.leagueId)}" /></td>
@@ -131,6 +132,8 @@
         ? (y.isLoggedIn ? "logged in" : "configured, not logged in")
         : "Yahoo:ClientId/ClientSecret not configured in appsettings.Local.json";
     }
+
+    els.sleeperHint.hidden = !draft.leagues.some((l) => l.provider === "Sleeper");
   }
 
   function renderTeamsList() {

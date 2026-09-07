@@ -77,3 +77,16 @@ Tests (Core, done): `SleeperStatMapTests`, `SleeperIdsTests`, `SleeperSnapshotMa
 3. Simulator emulation + simulator endpoint tests, parallel with 2.
 4. Control page + README + settings example; e2e test after 2 and 3.
 5. Final: full `dotnet test`, add the real league to `config/settings.json` with `Key: "sleeper"`, pick the watched roster id.
+
+## Status (2026-09-06)
+
+Implemented and tested on `feature/sleeper`:
+- Core: everything under "Design" above (`SleeperLeagueSource`, `SleeperPlayerDirectory` with the disk cache, `SleeperStatMap`, `SleeperIds`, `SleeperLineupSlots`, `SleeperSnapshotMapper`, `SleeperDecompressionHandler`, DI wiring, `LeagueProvider.Sleeper`, `SleeperOptions`, validator rule) plus the Core unit tests listed under "Tests".
+- Simulator: `SleeperEmulation` + `/v1/*` routes over the shared simulated league; `SimulatorSleeperEndpointTests`.
+- App: `Sleeper` in the control page's provider dropdown with a one-line hint; settings API/validation accept Sleeper leagues with no credentials; dashboard/control page show the provider per league.
+- End to end: `SleeperEndToEndTests` - ESPN + Sleeper leagues from one simulator each alert exactly once (receiving TD via `rec_td`), a D/ST interception-return TD on the abbreviation-keyed `def_td` row raises a Defensive alert, and the Sleeper dashboard shows all 10 named rosters with fully named starters (player directory + mapper path).
+- Docs: README "Sleeper leagues" section, `config/README.md` entry for `sleeper-players.json`.
+
+Remaining (by hand, on the user's machine):
+1. Add the real league to `config/settings.json` (control page or by hand): `{ "Key": "sleeper", "Provider": "Sleeper", "LeagueId": "1401782105192570880" }`, restart, then pick the watched roster id from the control page's team picker after the first poll.
+2. First live verification on game day: confirm the first poll downloads `config/sleeper-players.json`, that the watched team's starters are named, and that a real touchdown raises exactly one alert in the Sleeper league.

@@ -11,8 +11,13 @@ Holds runtime files that shouldn't be checked in:
   (the control page will tell you).
 - `yahoo-token.json` - the saved Yahoo OAuth access/refresh token pair, written after you log in at
   http://localhost:5055/setup/yahoo (see the "Yahoo leagues" section of the top-level README).
+- `sleeper-players.json` - a trimmed cache of Sleeper's players dictionary (`GET /v1/players/nfl`:
+  id -> name, position, NFL team), written on the first poll of a Sleeper league and refreshed once
+  a day (Sleeper asks for at most one download per day). Path configurable via
+  `Sleeper:PlayersCacheFilePath` (see the "Sleeper leagues" section of the top-level README).
 
 Everything in this folder except this file and `settings.example.json` is git-ignored. Deleting
 `yahoo-token.json` (or using the "Log out" button on the setup page) forces a fresh Yahoo login
-next time the app polls a Yahoo league. Deleting `settings.json` resets you to zero leagues/teams
-on next startup (it gets recreated automatically).
+next time the app polls a Yahoo league. Deleting `sleeper-players.json` forces a fresh download of
+the players dictionary on the next Sleeper poll. Deleting `settings.json` resets you to zero
+leagues/teams on next startup (it gets recreated automatically).

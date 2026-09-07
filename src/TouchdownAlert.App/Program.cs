@@ -340,8 +340,21 @@ static bool EnsureSettingsFileExists(string settingsFilePath)
         Directory.CreateDirectory(dir);
     }
 
-    File.WriteAllText(settingsFilePath, root.ToJsonString(new JsonSerializerOptions { WriteIndented = true }));
-    return true;
+    // Create atomically (temp file + non-overwriting move) so two instances starting at the same time - e.g.
+    // parallel integration-test hosts on a fresh checkout - can't collide on the half-written file; the loser
+    // simply uses the file the winner created.
+    var tempPath = settingsFilePath + ".tmp-" + Guid.NewGuid().ToString("N");
+    File.WriteAllText(tempPath, root.ToJsonString(new JsonSerializerOptions { WriteIndented = true }));
+    try
+    {
+        File.Move(tempPath, settingsFilePath, overwrite: false);
+        return true;
+    }
+    catch (IOException) when (File.Exists(settingsFilePath))
+    {
+        try { File.Delete(tempPath); } catch (IOException) { /* best effort */ }
+        return false;
+    }
 }
 
 /// <summary>Exposed for WebApplicationFactory in integration tests.</summary>
