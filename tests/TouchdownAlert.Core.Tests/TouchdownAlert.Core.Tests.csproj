@@ -25,6 +25,7 @@
 
   <ItemGroup>
     <None Include="..\..\fixtures\*.json" CopyToOutputDirectory="PreserveNewest" LinkBase="fixtures" />
+    <None Include="..\..\fixtures\sleeper\*.json" CopyToOutputDirectory="PreserveNewest" LinkBase="fixtures\sleeper" />
   </ItemGroup>
 
 </Project>

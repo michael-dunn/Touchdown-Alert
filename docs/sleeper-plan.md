@@ -20,33 +20,48 @@ Starters array order follows `roster_positions`; a `"0"` entry is an empty slot.
 
 ## TD stat keys (union over all 18 weeks of 2025)
 
-Count these, per player:
+Implemented in `SleeperStatMap.FromStats(stats, isTeamDefense)`. Rows whose id starts with `TEAM_` are NFL team aggregates and are dropped before mapping (`SleeperStatsParser`).
 
-| Sleeper key | TouchdownType |
-| --- | --- |
-| `pass_td` | Passing |
-| `rush_td` | Rushing |
-| `rec_td` | Receiving |
-| `kr_td` | KickReturn |
-| `pr_td` | PuntReturn |
-| `fum_rec_td` | FumbleReturn |
-| `blk_kick_ret_td`, `blk_pr_td` | BlockedKickReturn |
-| `def_td`, `idp_def_td` | Defensive (players: IDP only) |
-| `misc_td` | Defensive (misc; verify it is not already in `st_td`) |
+**Individual player rows** (numeric id):
 
-For **DEF units** the per-week stats endpoint only exposes `td` (an aggregate: points-allowed logic uses it, it counts *opponent* TDs allowed, e.g. `BAL td:5` with -2 pts). DEF scoring TDs appear as `def_td` / `st_td` / `def_st_td` only in the league-scoring sense; in 2025 data no DEF row carried `def_td`/`st_td`, so **DEF touchdowns must be detected from `def_st_td`/`def_td`/`st_td` if present, never from `td`**. Treat `td` and `anytime_tds` as aggregates and never count them.
+| Sleeper key | TouchdownType | Rule |
+| --- | --- | --- |
+| `pass_td` | Passing | |
+| `rush_td` | Rushing | |
+| `rec_td` | Receiving | |
+| `st_td` | Return | Aggregate of kick/punt/blocked-kick return TDs. Preferred whenever present. |
+| `kr_td` | KickReturn | Only when `st_td` is **absent** |
+| `pr_td` | PuntReturn | Only when `st_td` is **absent** |
+| `blk_kick_ret_td`, `blk_pr_td` | BlockedKickReturn | Only when `st_td` is **absent** |
+| `fum_rec_td` | FumbleReturn | `fum_rec_ez_tds` duplicates it and is ignored |
+| `idp_def_td`, `def_td` | Defensive | `def_td` only if Sleeper ever puts it on a player row |
 
-For individual players, `st_td` is an aggregate of `kr_td` + `pr_td` + `misc_td`/blocked-kick returns: do not count it alongside those (double count). Ignore `pass_int_td` (QB threw a pick-six), `first_td`, `*_lng`, `*_40p`, `*_50p`, `bonus_*`.
+Never add `misc_td` on top of `st_td` - it duplicates the blocked-kick component.
+
+**Team-defense rows** (id is an NFL abbreviation, position `DEF`):
+
+| Sleeper key | TouchdownType | Rule |
+| --- | --- | --- |
+| `def_td` | Defensive | INT/fumble return TD |
+| `def_st_td` | Return | Kick/punt/blocked-kick return TD |
+
+Do **not** count `misc_td` on DEF rows (duplicate of the blocked-kick portion of `def_st_td`), and do **not** count `td` - on a DEF row that is *opponent* touchdowns allowed (e.g. `"BAL": {"td":5,"pts_std":-2}`).
+
+**Never counted anywhere**: `td`, `anytime_tds`, `first_td`, `pass_int_td` (the QB threw a pick-six), `misc_td`, `fum_rec_ez_tds`, and every `*_lng`, `*_40p`, `*_50p`, `bonus_*` variant.
 
 ## Design (mirrors the Yahoo provider)
 
-Core (`src/TouchdownAlert.Core/Sleeper/`):
-- `LeagueProvider.Sleeper` enum value; `LeagueOptions.BaseUrl` default `https://api.sleeper.app`.
-- `SleeperWire.cs`: System.Text.Json DTOs for state, league, users, rosters, matchups, stats, trimmed player.
-- `SleeperStatMap.cs`: the table above, `TouchdownCounts FromSleeperStats(IReadOnlyDictionary<string,double>)`.
-- `SleeperPlayerDirectory`: id -> (full name, position, NFL team). Trimmed cache at `config/sleeper-players.json` (git-ignored via `config/*`), refreshed when older than 24 h, stale cache used if the download fails. Unknown id -> `"Player {id}"`. DEF ids map to a fixed negative `long` per NFL abbreviation (RosteredPlayer.PlayerId is `long`).
-- `SleeperLeagueSource : ILeagueSource`: per poll fetch state (once per poll, cheap), league (cache name/season), users+rosters (cache, refresh every N polls or when a starter id is missing), matchups/{week}, stats/{season}/{week}. Build a `TeamSnapshot` for all 12 rosters: starters get `LineupSlotId` from position order (QB=0,RB=2,WR=4,TE=6,FLEX=23,K=17,DEF=16), bench = 20, reserve = 21. Player points from `players_points`, team points from `points`. `MatchupSnapshot` pairs by `matchup_id`, lower roster_id as home.
-- `SleeperApiException`, DI wiring in `ServiceCollectionExtensions` (named HttpClient with `AutomaticDecompression`), validator accepts Sleeper with no credentials.
+Core (`src/TouchdownAlert.Core/Sleeper/`, implemented):
+- `LeagueProvider.Sleeper` enum value; `SleeperOptions` (section `Sleeper`: `ApiBaseUrl` default `https://api.sleeper.app`, `PlayersCacheFilePath` default `config/sleeper-players.json`, `PlayersCacheMaxAgeHours` default 24). A league's `BaseUrl` overrides `ApiBaseUrl`.
+- `SleeperWire.cs`: System.Text.Json DTOs for state, league, users, rosters, matchups, player; `SleeperStatsParser` for the stats dictionary (drops `TEAM_*` rows, tolerates non-numeric values).
+- `SleeperStatMap.FromStats(stats, isTeamDefense)`: the tables above.
+- `SleeperIds`: numeric id -> `long`; NFL abbreviation -> fixed negative id (-1..-32, alphabetical table); anything else -> deterministic FNV hash below -1000. `IsTeamDefense` = 2-3 upper-case letters.
+- `SleeperLineupSlots`: roster_positions entry -> ESPN slot id (QB=0, RB=2, WR=4, TE=6, FLEX=23, K=17, DEF=16 shown as "D/ST", BN=20 shown as "BE", IR=21; unknown starting slot -> 23 with the raw name). Position `DEF` is displayed as `D/ST` like ESPN.
+- `SleeperPlayerDirectory`: id -> (full name, position, NFL team). Trimmed cache (git-ignored via `config/*`) written atomically (temp + move), re-downloaded when older than the TTL, stale cache used if the download fails (with a 10-minute retry back-off), in-memory after the first read. Unknown id -> `"Player {id}"` / DEF -> the abbreviation.
+- `SleeperSnapshotMapper.Map(...)`: pure. Every roster is a team (bye weeks included); starters first in roster_positions order (matchup row's `starters`/`players` preferred over the roster's, `"0"` skipped without shifting later slots), then bench, then `reserve` as IR. Team name = `metadata.team_name`, else `"Team {display_name}"`, else `"Team {roster_id}"`. Player points from `players_points`, team points from `points`, `MatchupSnapshot` pairs by `matchup_id` with the lower roster_id as home.
+- `SleeperLeagueSource : ILeagueSource`: per poll `v1/state/nfl` (skipped when both `SeasonId` and `ScoringPeriodId` are forced; week = `ScoringPeriodId ?? state.week`, season = `SeasonId ?? state.season`), then concurrently `v1/league/{id}` (cached after first success), `/users`, `/rosters`, `/matchups/{week}`, `v1/stats/nfl/regular/{season}/{week}`, plus the directory. Transport/JSON/status errors -> `SleeperApiException` with the URL.
+- `SleeperDecompressionHandler`: a DelegatingHandler asking for gzip/br and decoding it. Deliberately NOT `SocketsHttpHandler.AutomaticDecompression`: `ConfigureHttpClientDefaults` runs *before* per-client configuration, so a per-client primary handler would override the integration tests' TestServer routing.
+- DI in `ServiceCollectionExtensions`: shared `ISleeperPlayerDirectory` singleton on named client `sleeper-players` (60 s timeout), one `league:{key}` client per Sleeper league, `case LeagueProvider.Sleeper` in the source factory. Validator: Sleeper needs no credentials, `LeagueId` must be all digits.
 
 App:
 - `control.js` provider dropdown gains `Sleeper`; no login hint needed.
@@ -54,7 +69,7 @@ App:
 
 Simulator: `SleeperEmulation.cs` serving `/v1/state/nfl`, `/v1/league/{id}`, `/users`, `/rosters`, `/matchups/{week}`, `/v1/stats/nfl/regular/{season}/{week}`, `/v1/players/nfl` over the same `SimulatedLeague`, translating ESPN stat ids to Sleeper keys.
 
-Tests: `SleeperStatMapTests`, `SleeperSnapshotMapperTests` (fixture JSON captured from the real league), `SleeperPlayerDirectoryTests` (cache TTL, stale fallback), `SimulatorSleeperEndpointTests`, `SleeperEndToEndTests` (ESPN + Sleeper from one simulator, each watched team alerts once).
+Tests (Core, done): `SleeperStatMapTests`, `SleeperIdsTests`, `SleeperSnapshotMapperTests` (fixture JSON captured from the real league), `SleeperPlayerDirectoryTests` (cache TTL, stale fallback, concurrency), `SleeperLeagueSourceTests` (routes, caching, errors), `SleeperDecompressionHandlerTests`, `SleeperDependencyInjectionTests` (full DI with ConfigureHttpClientDefaults routing). Elsewhere: `SimulatorSleeperEndpointTests`, `SleeperEndToEndTests` (ESPN + Sleeper from one simulator, each watched team alerts once).
 
 ## Agent split
 1. Core wire DTOs + stat map + player directory (+ unit tests).

@@ -8,6 +8,7 @@ using TouchdownAlert.Core.Configuration;
 using TouchdownAlert.Core.Detection;
 using TouchdownAlert.Core.Espn;
 using TouchdownAlert.Core.Models;
+using TouchdownAlert.Core.Sleeper;
 using TouchdownAlert.Core.Sounds;
 using TouchdownAlert.Core.Yahoo;
 
@@ -31,6 +32,7 @@ public static class ServiceCollectionExtensions
         services.AddOptions<SoundOptions>().Bind(configuration.GetSection(SoundOptions.SectionName));
         services.AddOptions<AlertOptions>().Bind(configuration.GetSection(AlertOptions.SectionName));
         services.AddOptions<YahooOptions>().Bind(configuration.GetSection(YahooOptions.SectionName));
+        services.AddOptions<SleeperOptions>().Bind(configuration.GetSection(SleeperOptions.SectionName));
         services.Configure<OverlayOptions>(configuration.GetSection(OverlayOptions.SectionName));
 
         services.AddSingleton(TimeProvider.System);
@@ -80,6 +82,35 @@ public static class ServiceCollectionExtensions
             });
         }
 
+        // Sleeper: one shared player directory (its own client - the 15 MB dictionary needs a longer timeout)
+        // plus one client per league. Compression is an additional handler, not the primary handler, so the
+        // integration tests' ConfigureHttpClientDefaults(...ConfigurePrimaryHttpMessageHandler) routing still
+        // applies to these clients (see SleeperDecompressionHandler for why a primary handler would break it).
+        services.AddHttpClient(SleeperPlayerDirectory.HttpClientName, (provider, client) =>
+            {
+                var sleeper = provider.GetRequiredService<IOptionsMonitor<SleeperOptions>>().CurrentValue;
+                client.BaseAddress = SleeperBaseAddress(sleeper.ApiBaseUrl);
+                client.Timeout = TimeSpan.FromSeconds(60);
+            })
+            .AddHttpMessageHandler(() => new SleeperDecompressionHandler());
+
+        services.AddSingleton<ISleeperPlayerDirectory>(provider => new SleeperPlayerDirectory(
+            provider.GetRequiredService<IHttpClientFactory>().CreateClient(SleeperPlayerDirectory.HttpClientName),
+            provider.GetRequiredService<IOptionsMonitor<SleeperOptions>>(),
+            provider.GetRequiredService<TimeProvider>(),
+            provider.GetRequiredService<ILoggerFactory>().CreateLogger<SleeperPlayerDirectory>()));
+
+        foreach (var leagueOptions in leagues.Items.Where(l => l.Provider == LeagueProvider.Sleeper))
+        {
+            services.AddHttpClient(HttpClientName(leagueOptions.Key), (provider, client) =>
+                {
+                    var apiBaseUrl = provider.GetRequiredService<IOptionsMonitor<SleeperOptions>>().CurrentValue.ApiBaseUrl;
+                    client.BaseAddress = SleeperBaseAddress(leagueOptions.BaseUrl ?? apiBaseUrl);
+                    client.Timeout = TimeSpan.FromSeconds(leagueOptions.RequestTimeoutSeconds);
+                })
+                .AddHttpMessageHandler(() => new SleeperDecompressionHandler());
+        }
+
         services.AddSingleton<IEnumerable<ILeagueSource>>(provider =>
         {
             var httpClientFactory = provider.GetRequiredService<IHttpClientFactory>();
@@ -88,6 +119,7 @@ public static class ServiceCollectionExtensions
             var currentLeagues = provider.GetRequiredService<IOptions<LeaguesOptions>>().Value.Items;
             var alertOptionsMonitor = provider.GetRequiredService<IOptionsMonitor<AlertOptions>>();
             var yahooAuth = provider.GetRequiredService<IYahooAuthService>();
+            var sleeperPlayers = provider.GetRequiredService<ISleeperPlayerDirectory>();
 
             var sources = new List<ILeagueSource>();
             foreach (var leagueOptions in currentLeagues)
@@ -114,6 +146,16 @@ public static class ServiceCollectionExtensions
                             loggerFactory.CreateLogger<YahooLeagueSource>()));
                         break;
 
+                    case LeagueProvider.Sleeper:
+                        var sleeperClient = httpClientFactory.CreateClient(HttpClientName(leagueOptions.Key));
+                        sources.Add(new SleeperLeagueSource(
+                            sleeperClient,
+                            leagueOptions,
+                            sleeperPlayers,
+                            timeProvider,
+                            loggerFactory.CreateLogger<SleeperLeagueSource>()));
+                        break;
+
                     default:
                         throw new NotSupportedException($"Unknown league provider \"{leagueOptions.Provider}\".");
                 }
@@ -126,4 +168,7 @@ public static class ServiceCollectionExtensions
     }
 
     private static string HttpClientName(string leagueKey) => "league:" + leagueKey;
+
+    /// <summary>Sleeper sources build request URIs relative to the base, so it must end with "/" or a path segment in it would be dropped.</summary>
+    private static Uri SleeperBaseAddress(string baseUrl) => new(baseUrl.TrimEnd('/') + "/");
 }

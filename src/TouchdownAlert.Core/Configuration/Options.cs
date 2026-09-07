@@ -9,10 +9,16 @@ public sealed class LeagueOptions
 
     public LeagueProvider Provider { get; set; } = LeagueProvider.Espn;
 
-    /// <summary>ESPN numeric league id as string; Yahoo league key later.</summary>
+    /// <summary>
+    /// Provider league id as a string: ESPN numeric id; Yahoo bare id or full "{game_key}.l.{id}" key; Sleeper
+    /// 19-digit numeric id (the number in the league URL, e.g. 1401782105192570880).
+    /// </summary>
     public string LeagueId { get; set; } = "";
 
-    /// <summary>Base URL of the provider's read API. Null = provider default (ESPN: https://lm-api-reads.fantasy.espn.com).</summary>
+    /// <summary>
+    /// Base URL of the provider's read API. Null = provider default (ESPN: https://lm-api-reads.fantasy.espn.com,
+    /// Yahoo: <see cref="YahooOptions.ApiBaseUrl"/>, Sleeper: <see cref="SleeperOptions.ApiBaseUrl"/> = https://api.sleeper.app).
+    /// </summary>
     public string? BaseUrl { get; set; }
 
     /// <summary>Season year. Null = current year (auto).</summary>
@@ -159,4 +165,23 @@ public sealed class YahooOptions
     /// "additional_authorization_required". Blank to omit the parameter.
     /// </summary>
     public string Scope { get; set; } = "fspt-r";
+}
+
+public sealed class SleeperOptions
+{
+    public const string SectionName = "Sleeper";
+
+    /// <summary>Base URL of Sleeper's public read API (no auth). A league's <see cref="LeagueOptions.BaseUrl"/> overrides it.</summary>
+    public string ApiBaseUrl { get; set; } = "https://api.sleeper.app";
+
+    /// <summary>
+    /// Where the trimmed copy of Sleeper's ~15 MB player dictionary (GET /v1/players/nfl) is cached between
+    /// runs. Sleeper asks clients to fetch that endpoint at most once a day, so it is never requested per poll.
+    /// Relative paths resolve the same way <see cref="YahooOptions.TokenFilePath"/> does: against the nearest
+    /// ancestor folder containing TouchdownAlert.slnx, else the current directory.
+    /// </summary>
+    public string PlayersCacheFilePath { get; set; } = "config/sleeper-players.json";
+
+    /// <summary>Age after which the player cache is re-downloaded. Sleeper's stated limit is one call per day.</summary>
+    public int PlayersCacheMaxAgeHours { get; set; } = 24;
 }
