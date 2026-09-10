@@ -256,8 +256,8 @@ SignalR hub is at `/hub`; it pushes a `state` event after every poll, a `setting
 
 `src/TouchdownAlert.Overlay` is a small always-on-top WPF overlay for the agreed couch setup: a
 55" TV as Windows' primary display (playing the game full screen in a browser) and a laptop as the
-secondary display. The overlay sits on top of the game video, top-right by default, showing a row per
-watched team (color bar, name, score, TD count) and a 5-second banner strip for each touchdown as it
+secondary display. The overlay sits on top of the game video, top-right by default, showing a compact two-column tile grid (like the dashboard) with one tile per
+watched team (translucent team-color tint, name, score, TD count) and a 5-second banner strip for each touchdown as it
 comes in (queued in arrival order when more than one fires close together). It connects to the App's
 SignalR hub (`{appUrl}/hub`) and reconnects forever with backoff if the App restarts mid-game; while
 disconnected it shows a small "offline" pill instead of disappearing.

@@ -15,6 +15,8 @@
         <local:BoolToVisibilityConverter x:Key="BoolToVis" />
         <local:InverseBoolToVisibilityConverter x:Key="InverseBoolToVis" />
         <local:OpacityToBrushConverter x:Key="OpacityToBrush" />
+        <local:ColorWithAlphaConverter x:Key="ColorAlpha" />
+        <local:RowCountToColumnsConverter x:Key="RowsToColumns" />
     </Window.Resources>
 
     <Grid>
@@ -22,13 +24,13 @@
             <ScaleTransform x:Name="RootScale" ScaleX="1" ScaleY="1" />
         </Grid.LayoutTransform>
 
-        <Border x:Name="RootBorder" CornerRadius="14" Padding="18"
+        <Border x:Name="RootBorder" CornerRadius="12" Padding="8"
                 Background="{Binding Settings.Opacity, Converter={StaticResource OpacityToBrush}}">
-            <StackPanel Width="420">
+            <StackPanel>
 
                 <!-- Caption shown only when unlocked -->
                 <Grid Visibility="{Binding Settings.Locked, Converter={StaticResource InverseBoolToVis}}"
-                      Margin="0,0,0,8"
+                      Margin="3,0,3,6"
                       MouseLeftButtonDown="Caption_MouseLeftButtonDown">
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="*" />
@@ -37,22 +39,28 @@
                     <TextBlock Grid.Column="0"
                                Text="drag to move · lock in /control to save"
                                Foreground="#CCCCCC"
-                               FontSize="12"
+                               FontSize="11"
                                FontStyle="Italic"
-                               VerticalAlignment="Center" />
+                               VerticalAlignment="Center"
+                               Margin="0,0,8,0" />
                     <Border Grid.Column="1"
-                            BorderBrush="White" BorderThickness="1" CornerRadius="10"
-                            Width="20" Height="20"
+                            BorderBrush="White" BorderThickness="1" CornerRadius="9"
+                            Width="18" Height="18"
                             Background="#33000000"
                             Cursor="Hand"
                             MouseLeftButtonDown="CloseButton_MouseLeftButtonDown">
-                        <TextBlock Text="x" Foreground="White" FontSize="12" FontWeight="Bold"
+                        <TextBlock Text="x" Foreground="White" FontSize="11" FontWeight="Bold"
                                    HorizontalAlignment="Center" VerticalAlignment="Center" />
                     </Border>
                 </Grid>
 
-                <!-- Team rows -->
-                <ItemsControl ItemsSource="{Binding Rows}">
+                <!-- Team tiles: 2-column grid like the dashboard (1 column when only one team is watched) -->
+                <ItemsControl x:Name="TileGrid" ItemsSource="{Binding Rows}" HorizontalAlignment="Left">
+                    <ItemsControl.ItemsPanel>
+                        <ItemsPanelTemplate>
+                            <UniformGrid Columns="{Binding Rows.Count, Converter={StaticResource RowsToColumns}}" />
+                        </ItemsPanelTemplate>
+                    </ItemsControl.ItemsPanel>
                     <ItemsControl.ItemTemplate>
                         <DataTemplate>
                             <DataTemplate.Triggers>
@@ -60,9 +68,9 @@
                                     <DataTrigger.EnterActions>
                                         <BeginStoryboard x:Name="PulseStoryboard">
                                             <Storyboard>
-                                                <DoubleAnimation Storyboard.TargetName="RowHighlight"
+                                                <DoubleAnimation Storyboard.TargetName="TileHighlight"
                                                                  Storyboard.TargetProperty="Opacity"
-                                                                 From="0.15" To="0.55" Duration="0:0:0.35"
+                                                                 From="0.10" To="0.45" Duration="0:0:0.35"
                                                                  AutoReverse="True" RepeatBehavior="Forever" />
                                             </Storyboard>
                                         </BeginStoryboard>
@@ -72,38 +80,37 @@
                                     </DataTrigger.ExitActions>
                                 </DataTrigger>
                             </DataTemplate.Triggers>
-                            <Grid Margin="0,3">
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="8" />
-                                    <ColumnDefinition Width="10" />
-                                    <ColumnDefinition Width="*" />
-                                    <ColumnDefinition Width="Auto" />
-                                </Grid.ColumnDefinitions>
 
-                                <Border x:Name="RowHighlight" Grid.Column="0" Grid.ColumnSpan="4"
-                                        Background="White" Opacity="0" CornerRadius="6" />
+                            <!-- Tile: translucent team-color tint + soft team-color accent on the left -->
+                            <Border Margin="3" MinWidth="140" CornerRadius="8"
+                                    Background="{Binding Color, Converter={StaticResource ColorAlpha}, ConverterParameter=0.16}"
+                                    BorderThickness="4,0,0,0"
+                                    BorderBrush="{Binding Color, Converter={StaticResource ColorAlpha}, ConverterParameter=0.55}">
+                                <Grid>
+                                    <Border x:Name="TileHighlight" Background="White" Opacity="0" CornerRadius="0,8,8,0" />
 
-                                <Rectangle Grid.Column="0" Width="8" RadiusX="3" RadiusY="3"
-                                           Fill="{Binding Color}" VerticalAlignment="Stretch" />
-
-                                <TextBlock Grid.Column="2" Text="{Binding Label}"
-                                           Foreground="White" FontSize="20" FontWeight="SemiBold"
-                                           VerticalAlignment="Center" Margin="4,0,12,0" />
-
-                                <StackPanel Grid.Column="3" Orientation="Horizontal" VerticalAlignment="Center">
-                                    <TextBlock Text="{Binding PointsText}" Foreground="White"
-                                               FontSize="34" FontWeight="Bold" />
-                                    <TextBlock Text=" (" Foreground="#BBFFFFFF" FontSize="20" VerticalAlignment="Bottom" Margin="4,0,0,3"/>
-                                    <TextBlock Text="{Binding TouchdownTotal}" Foreground="#BBFFFFFF" FontSize="20" VerticalAlignment="Bottom" Margin="0,0,0,3"/>
-                                    <TextBlock Text=")" Foreground="#BBFFFFFF" FontSize="20" VerticalAlignment="Bottom" Margin="0,0,0,3"/>
-                                </StackPanel>
-                            </Grid>
+                                    <StackPanel Margin="10,6,12,7">
+                                        <TextBlock Text="{Binding Label}"
+                                                   Foreground="#DDFFFFFF" FontSize="13" FontWeight="SemiBold"
+                                                   MaxWidth="170" HorizontalAlignment="Left"
+                                                   TextWrapping="NoWrap" TextTrimming="CharacterEllipsis" />
+                                        <StackPanel Orientation="Horizontal">
+                                            <TextBlock Text="{Binding PointsText}" Foreground="White"
+                                                       FontSize="28" FontWeight="Bold" />
+                                            <TextBlock Text="{Binding TouchdownTotal, StringFormat=' ({0})'}"
+                                                       Foreground="#99FFFFFF" FontSize="14" FontWeight="SemiBold"
+                                                       VerticalAlignment="Bottom" Margin="0,0,0,5" />
+                                        </StackPanel>
+                                    </StackPanel>
+                                </Grid>
+                            </Border>
                         </DataTemplate>
                     </ItemsControl.ItemTemplate>
                 </ItemsControl>
 
-                <!-- TD banner strip -->
-                <Border x:Name="BannerBorder" Height="0" ClipToBounds="True" Margin="0,6,0,0"
+                <!-- TD banner strip (width pinned to the tile grid so the window doesn't grow while it shows) -->
+                <Border x:Name="BannerBorder" Height="0" ClipToBounds="True" Margin="0,4,0,0"
+                        Width="{Binding ActualWidth, ElementName=TileGrid}" HorizontalAlignment="Left"
                         CornerRadius="8" Padding="10,0">
                     <Border.Style>
                         <Style TargetType="Border">
@@ -113,7 +120,7 @@
                                         <BeginStoryboard>
                                             <Storyboard>
                                                 <DoubleAnimation Storyboard.TargetProperty="Height"
-                                                                 To="64" Duration="0:0:0.2" />
+                                                                 To="44" Duration="0:0:0.2" />
                                             </Storyboard>
                                         </BeginStoryboard>
                                     </DataTrigger.EnterActions>
@@ -130,7 +137,7 @@
                         </Style>
                     </Border.Style>
                     <Border.Background>
-                        <SolidColorBrush Color="{Binding CurrentBanner.Color}" Opacity="0.85" />
+                        <SolidColorBrush Color="{Binding CurrentBanner.Color}" Opacity="0.8" />
                     </Border.Background>
                     <Grid VerticalAlignment="Center">
                         <Grid.ColumnDefinitions>
@@ -138,20 +145,20 @@
                             <ColumnDefinition Width="Auto" />
                         </Grid.ColumnDefinitions>
                         <TextBlock Grid.Column="0" Text="{Binding CurrentBanner.DisplayText}"
-                                   Foreground="White" FontSize="22" FontWeight="Bold"
+                                   Foreground="White" FontSize="15" FontWeight="Bold"
                                    TextWrapping="NoWrap" TextTrimming="CharacterEllipsis"
                                    VerticalAlignment="Center" />
                         <Border Grid.Column="1"
                                 Visibility="{Binding CurrentBanner.IsTest, Converter={StaticResource BoolToVis}}"
                                 Background="#33000000" CornerRadius="4" Padding="6,2" Margin="8,0,0,0">
-                            <TextBlock Text="TEST" Foreground="White" FontSize="12" FontWeight="Bold" />
+                            <TextBlock Text="TEST" Foreground="White" FontSize="11" FontWeight="Bold" />
                         </Border>
                     </Grid>
                 </Border>
 
                 <!-- Offline pill -->
                 <Border Visibility="{Binding IsOffline, Converter={StaticResource BoolToVis}}"
-                        HorizontalAlignment="Right" Margin="0,6,0,0"
+                        HorizontalAlignment="Right" Margin="0,4,3,0"
                         Background="#66808080" CornerRadius="8" Padding="8,2">
                     <TextBlock Text="offline" Foreground="White" FontSize="11" />
                 </Border>
@@ -162,7 +169,7 @@
         <!-- Dashed border shown only when unlocked, drawn over everything -->
         <Rectangle IsHitTestVisible="False"
                    Visibility="{Binding Settings.Locked, Converter={StaticResource InverseBoolToVis}}"
-                   RadiusX="14" RadiusY="14"
+                   RadiusX="12" RadiusY="12"
                    Stroke="White" StrokeThickness="2" StrokeDashArray="4 3" />
     </Grid>
 </Window>
