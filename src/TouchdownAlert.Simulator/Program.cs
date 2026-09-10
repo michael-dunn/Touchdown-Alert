@@ -128,6 +128,39 @@ static (string[] Segments, Dictionary<string, string> Query) ParseYahooPath(stri
 static IResult XmlResult(System.Xml.Linq.XDocument document) =>
     Results.Text(document.ToString(), "application/xml");
 
+// ---- Sleeper-shaped endpoints (https://api.sleeper.app/v1/...) over the SAME simulated league ----
+// Sleeper's read API is public and unauthenticated, so unlike the Yahoo routes there is no bearer-token gate.
+// Payloads are JsonNode graphs with the real snake_case field names (see SleeperEmulation), so Results.Json
+// serializes them verbatim - no naming policy involved.
+var sleeper = app.MapGroup("/v1");
+
+sleeper.MapGet("/state/nfl", (SimulatedLeague league) => Results.Json(SleeperEmulation.BuildState(league)));
+
+sleeper.MapGet("/league/{leagueId}", (string leagueId, SimulatedLeague league) =>
+    SleeperLeagueResult(leagueId, () => SleeperEmulation.BuildLeague(league)));
+
+sleeper.MapGet("/league/{leagueId}/users", (string leagueId, SimulatedLeague league) =>
+    SleeperLeagueResult(leagueId, () => SleeperEmulation.BuildUsers(league)));
+
+sleeper.MapGet("/league/{leagueId}/rosters", (string leagueId, SimulatedLeague league) =>
+    SleeperLeagueResult(leagueId, () => SleeperEmulation.BuildRosters(league)));
+
+// The simulator holds one scoring period, so {week} is accepted for route fidelity but not used.
+sleeper.MapGet("/league/{leagueId}/matchups/{week:int}", (string leagueId, int week, SimulatedLeague league) =>
+    SleeperLeagueResult(leagueId, () => SleeperEmulation.BuildMatchups(league)));
+
+// Likewise {season}/{week}: whatever is asked for, the current period's stats come back.
+sleeper.MapGet("/stats/nfl/regular/{season}/{week:int}", (string season, int week, SimulatedLeague league) =>
+    Results.Json(SleeperEmulation.BuildStats(league)));
+
+sleeper.MapGet("/players/nfl", (SimulatedLeague league) => Results.Json(SleeperEmulation.BuildPlayers(league)));
+
+// Sleeper league ids are strings; anything but the simulated league's id is a 404, like the ESPN route.
+static IResult SleeperLeagueResult(string leagueId, Func<System.Text.Json.Nodes.JsonNode> build) =>
+    leagueId == SleeperEmulation.LeagueId
+        ? Results.Json(build())
+        : Results.NotFound(new { message = $"League {leagueId} not found." });
+
 // ---- Control API ----
 var sim = app.MapGroup("/sim");
 

@@ -13,3 +13,6 @@ sounds/*
 config/*
 !config/README.md
 !config/settings.example.json
+
+# Claude Code worktrees
+.claude/

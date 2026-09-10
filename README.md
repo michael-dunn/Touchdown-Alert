@@ -1,22 +1,23 @@
 # TouchdownAlert
 
-Watches an ESPN fantasy football league and plays a sound whenever a starter on a
-team you're rooting for scores a touchdown. Runs as a small ASP.NET Core app with
-a live dashboard on your laptop or phone.
+Watches your ESPN, Yahoo and Sleeper fantasy football leagues and plays a sound whenever a
+starter on a team you're rooting for scores a touchdown. Runs as a small ASP.NET Core app
+with a live dashboard on your laptop or phone.
 
 ## Prerequisites
 
 - .NET 10 SDK
 - Windows (the audio player uses NAudio's Windows waveOut backend)
-- A public (or accessible) ESPN fantasy football league
+- A fantasy football league on ESPN (public or accessible), Yahoo (one-time OAuth login, see
+  below) or Sleeper (public read API, no login)
 
 ## Project layout
 
 ```
 src/
-  TouchdownAlert.Core/        Parser, touchdown detector, alert router, sound resolver, DI wiring
+  TouchdownAlert.Core/        ESPN/Yahoo/Sleeper parsers, touchdown detector, alert router, sound resolver, DI wiring
   TouchdownAlert.App/         This app: ASP.NET Core host, poller, audio playback, SignalR hub, dashboard
-  TouchdownAlert.Simulator/   Fake ESPN server for testing without waiting on a real game
+  TouchdownAlert.Simulator/   Fake ESPN/Yahoo/Sleeper server for testing without waiting on a real game
 tests/
   TouchdownAlert.Core.Tests/
   TouchdownAlert.IntegrationTests/
@@ -82,7 +83,7 @@ the teams are listed.
 ### Multiple leagues
 
 `Leagues` is an array, so a watched team can live in a different league than the others —
-useful if you're in more than one fantasy league, or once other providers are supported.
+useful if you're in more than one fantasy league, on the same provider or across ESPN/Yahoo/Sleeper.
 Each league needs a unique `Key` (your own short name, e.g. `"main"`); each watched team's
 `League` references that key. If you only configure one league, `League` on a watched team
 can be omitted and defaults to it; with more than one league configured, every watched team
@@ -146,6 +147,28 @@ message telling you to add them to `appsettings.Local.json`; not being logged in
 Yahoo rosters are only fetched for teams you're actually watching (`Alerts:WatchedTeams`) - Yahoo
 rate-limits aggressively, and the dashboard/alerts never need any other team's lineup.
 
+### Sleeper leagues
+
+Sleeper's read API is public - no developer app, no login, nothing to put in `appsettings.Local.json`.
+Add the league from the control page (provider **Sleeper**) or directly in `config/settings.json`:
+
+```json
+{ "Key": "sleeper", "Provider": "Sleeper", "LeagueId": "1401782105192570880" }
+```
+
+- `LeagueId` is the long number in the Sleeper app / league URL
+  (`https://sleeper.com/leagues/1401782105192570880/...`). It's kept as a string because it doesn't
+  fit in a 32-bit integer.
+- `TeamId` for a watched team is Sleeper's **roster id** (1..N in draft order), not a user id. You
+  don't need to look it up: after the first poll the control page's team picker lists every roster by
+  its team name (or `Team <display name>` when the owner never named it) - pick yours from the list.
+- Sleeper's matchup and stats responses carry player ids only, so the app keeps a trimmed copy of
+  Sleeper's players dictionary (`GET /v1/players/nfl`, ~15 MB upstream) at
+  `config/sleeper-players.json`. It's downloaded on the first poll and refreshed once a day (Sleeper
+  asks clients not to hit that endpoint more often); if a refresh fails the stale copy keeps being used.
+  Deleting the file just forces a fresh download. `Sleeper:PlayersCacheFilePath` and
+  `Sleeper:ApiBaseUrl` in `appsettings.json` override the defaults if you ever need to.
+
 If a configured `SoundFile` can't be found, the dashboard still shows the alert —
 it just flags the sound as missing instead of silently failing.
 
@@ -162,7 +185,7 @@ dotnet run --project src/TouchdownAlert.App
 
 Then open the dashboard at **http://localhost:5055**.
 
-The app polls ESPN every `Polling:IntervalSeconds` (default 30s, editable live —
+The app polls each league's provider every `Polling:IntervalSeconds` (default 30s, editable live —
 no restart needed) and pushes updates to the dashboard over SignalR. From the
 dashboard you can:
 

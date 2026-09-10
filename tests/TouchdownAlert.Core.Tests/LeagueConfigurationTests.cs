@@ -103,6 +103,45 @@ public class LeagueConfigurationTests
     }
 
     [Fact]
+    public void ValidateAndResolve_SleeperProvider_NumericId_PassesWithoutCredentials()
+    {
+        var leagues = new List<LeagueOptions> { new() { Key = "sleeper", Provider = LeagueProvider.Sleeper, LeagueId = "1401782105192570880" } };
+        var watched = new List<WatchedTeamOptions> { new() { TeamId = 1, League = null, SoundFile = "a.mp3" } };
+
+        LeagueConfigurationValidator.ValidateAndResolve(leagues, watched);
+
+        Assert.Equal("sleeper", watched[0].League);
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("   ")]
+    [InlineData("nfl.l.12345")]
+    [InlineData("1401782105192570880x")]
+    [InlineData("-1")]
+    public void ValidateAndResolve_SleeperProvider_NonNumericId_Throws(string leagueId)
+    {
+        var leagues = new List<LeagueOptions> { new() { Key = "sleeper", Provider = LeagueProvider.Sleeper, LeagueId = leagueId } };
+
+        var ex = Assert.Throws<InvalidOperationException>(() => LeagueConfigurationValidator.ValidateAndResolve(leagues, []));
+        Assert.Contains("Sleeper", ex.Message);
+    }
+
+    [Fact]
+    public void Leagues_BindsSleeperProviderFromJson()
+    {
+        var config = BuildConfig("""
+        { "Leagues": [ { "Key": "sleeper", "Provider": "Sleeper", "LeagueId": "1401782105192570880" } ] }
+        """);
+
+        var leagues = new LeaguesOptions();
+        config.GetSection(LeaguesOptions.SectionName).Bind(leagues.Items);
+
+        Assert.Equal(LeagueProvider.Sleeper, leagues.Items[0].Provider);
+        Assert.Equal("1401782105192570880", leagues.Items[0].LeagueId);
+    }
+
+    [Fact]
     public void ValidateAndResolve_NoLeaguesConfigured_NoWatchedTeams_Passes()
     {
         // Zero leagues is a valid startup state (fresh install before the control page adds any).

@@ -50,6 +50,18 @@ public static class LeagueConfigurationValidator
                         "Create a Yahoo developer app and put them in appsettings.Local.json.");
                 }
             }
+
+            // Sleeper's API is public (no credentials), so the only thing that can be wrong at startup is the
+            // id itself: it is the 19-digit number in the league URL, kept as a string because it overflows int32.
+            if (league.Provider == LeagueProvider.Sleeper)
+            {
+                if (string.IsNullOrWhiteSpace(league.LeagueId) || !league.LeagueId.All(char.IsAsciiDigit))
+                {
+                    throw new InvalidOperationException(
+                        $"League \"{league.Key}\" uses the Sleeper provider but its \"LeagueId\" (\"{league.LeagueId}\") is not a numeric Sleeper league id. " +
+                        "Copy the number from the league URL, e.g. https://sleeper.com/leagues/1401782105192570880.");
+                }
+            }
         }
 
         foreach (var watched in watchedTeams)
