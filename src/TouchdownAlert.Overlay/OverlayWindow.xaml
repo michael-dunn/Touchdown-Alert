@@ -108,53 +108,7 @@
                     </ItemsControl.ItemTemplate>
                 </ItemsControl>
 
-                <!-- TD banner strip (width pinned to the tile grid so the window doesn't grow while it shows) -->
-                <Border x:Name="BannerBorder" Height="0" ClipToBounds="True" Margin="0,4,0,0"
-                        Width="{Binding ActualWidth, ElementName=TileGrid}" HorizontalAlignment="Left"
-                        CornerRadius="8" Padding="10,0">
-                    <Border.Style>
-                        <Style TargetType="Border">
-                            <Style.Triggers>
-                                <DataTrigger Binding="{Binding BannerVisible}" Value="True">
-                                    <DataTrigger.EnterActions>
-                                        <BeginStoryboard>
-                                            <Storyboard>
-                                                <DoubleAnimation Storyboard.TargetProperty="Height"
-                                                                 To="44" Duration="0:0:0.2" />
-                                            </Storyboard>
-                                        </BeginStoryboard>
-                                    </DataTrigger.EnterActions>
-                                    <DataTrigger.ExitActions>
-                                        <BeginStoryboard>
-                                            <Storyboard>
-                                                <DoubleAnimation Storyboard.TargetProperty="Height"
-                                                                 To="0" Duration="0:0:0.2" />
-                                            </Storyboard>
-                                        </BeginStoryboard>
-                                    </DataTrigger.ExitActions>
-                                </DataTrigger>
-                            </Style.Triggers>
-                        </Style>
-                    </Border.Style>
-                    <Border.Background>
-                        <SolidColorBrush Color="{Binding CurrentBanner.Color}" Opacity="0.8" />
-                    </Border.Background>
-                    <Grid VerticalAlignment="Center">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*" />
-                            <ColumnDefinition Width="Auto" />
-                        </Grid.ColumnDefinitions>
-                        <TextBlock Grid.Column="0" Text="{Binding CurrentBanner.DisplayText}"
-                                   Foreground="White" FontSize="15" FontWeight="Bold"
-                                   TextWrapping="NoWrap" TextTrimming="CharacterEllipsis"
-                                   VerticalAlignment="Center" />
-                        <Border Grid.Column="1"
-                                Visibility="{Binding CurrentBanner.IsTest, Converter={StaticResource BoolToVis}}"
-                                Background="#33000000" CornerRadius="4" Padding="6,2" Margin="8,0,0,0">
-                            <TextBlock Text="TEST" Foreground="White" FontSize="11" FontWeight="Bold" />
-                        </Border>
-                    </Grid>
-                </Border>
+                <!-- Touchdown banners live in BannerWindow (full-width strip at the top of the display). -->
 
                 <!-- Offline pill -->
                 <Border Visibility="{Binding IsOffline, Converter={StaticResource BoolToVis}}"

@@ -93,17 +93,18 @@ public class OverlayViewModelTests
     }
 
     [Fact]
-    public void EnqueueAlert_shows_banner_immediately_when_none_showing()
+    public void ShowAlert_shows_banner_immediately_and_pulses_the_team_tile()
     {
         var clock = new FakeTimeProvider();
         var vm = new OverlayViewModel(clock);
         vm.ApplyState(StateWith((1, "Michael", "#22c55e", 10, 1)));
 
-        vm.EnqueueAlert(new AlertDto { TeamId = 1, LeagueKey = "main", TeamLabel = "Michael", PlayerName = "Josh Allen", TouchdownType = "Passing", Count = 1 });
+        vm.ShowAlert(new AlertDto { TeamId = 1, LeagueKey = "main", TeamLabel = "Michael", PlayerName = "Josh Allen", TouchdownType = "Passing", Count = 1 });
 
         Assert.True(vm.BannerVisible);
         Assert.NotNull(vm.CurrentBanner);
         Assert.Equal("TOUCHDOWN · Michael · Josh Allen · passing", vm.CurrentBanner!.DisplayText);
+        Assert.Equal("#22c55e", vm.CurrentBanner.Color);
         Assert.True(vm.Rows[0].IsPulsing);
     }
 
@@ -111,7 +112,7 @@ public class OverlayViewModelTests
     public void Banner_text_lowercases_type_and_appends_count_when_greater_than_one()
     {
         var vm = new OverlayViewModel(new FakeTimeProvider());
-        vm.EnqueueAlert(new AlertDto { TeamId = 1, TeamLabel = "Michael", PlayerName = "Josh Allen", TouchdownType = "PASSING", Count = 2 });
+        vm.ShowAlert(new AlertDto { TeamId = 1, TeamLabel = "Michael", PlayerName = "Josh Allen", TouchdownType = "PASSING", Count = 2 });
 
         Assert.Equal("TOUCHDOWN · Michael · Josh Allen · passing ×2", vm.CurrentBanner!.DisplayText);
     }
@@ -120,21 +121,22 @@ public class OverlayViewModelTests
     public void Banner_carries_is_test_flag()
     {
         var vm = new OverlayViewModel(new FakeTimeProvider());
-        vm.EnqueueAlert(new AlertDto { TeamId = 1, TeamLabel = "Michael", PlayerName = "Josh Allen", TouchdownType = "rushing", Count = 1, IsTest = true });
+        vm.ShowAlert(new AlertDto { TeamId = 1, TeamLabel = "Michael", PlayerName = "Josh Allen", TouchdownType = "rushing", Count = 1, IsTest = true });
 
         Assert.True(vm.CurrentBanner!.IsTest);
     }
 
     [Fact]
-    public void Banner_hides_after_five_seconds_when_queue_empty()
+    public void Banner_hides_after_ten_seconds_by_default()
     {
         var clock = new FakeTimeProvider();
         var vm = new OverlayViewModel(clock);
         vm.ApplyState(StateWith((1, "Michael", "#22c55e", 10, 1)));
-        vm.EnqueueAlert(new AlertDto { TeamId = 1, TeamLabel = "Michael", PlayerName = "Josh Allen", TouchdownType = "passing", Count = 1 });
+        vm.ShowAlert(new AlertDto { TeamId = 1, LeagueKey = "main", TeamLabel = "Michael", PlayerName = "Josh Allen", TouchdownType = "passing", Count = 1 });
 
-        clock.Advance(TimeSpan.FromSeconds(4.9));
+        clock.Advance(TimeSpan.FromSeconds(9.9));
         Assert.True(vm.BannerVisible);
+        Assert.True(vm.Rows[0].IsPulsing);
 
         clock.Advance(TimeSpan.FromSeconds(0.2));
         Assert.False(vm.BannerVisible);
@@ -143,29 +145,45 @@ public class OverlayViewModelTests
     }
 
     [Fact]
-    public void Banners_show_sequentially_in_arrival_order_one_at_a_time()
+    public void Banner_uses_display_seconds_sent_by_the_app()
     {
+        var clock = new FakeTimeProvider();
+        var vm = new OverlayViewModel(clock);
+        vm.ShowAlert(new AlertDto { TeamId = 1, TeamLabel = "Michael", PlayerName = "Josh Allen", TouchdownType = "passing", Count = 1, DisplaySeconds = 4 });
+
+        clock.Advance(TimeSpan.FromSeconds(3.9));
+        Assert.True(vm.BannerVisible);
+
+        clock.Advance(TimeSpan.FromSeconds(0.2));
+        Assert.False(vm.BannerVisible);
+    }
+
+    [Fact]
+    public void New_alert_replaces_the_current_banner_and_restarts_its_timer()
+    {
+        // The App paces alerts and starts each sound when it sends the alert, so the overlay must switch
+        // banners the moment the next alert arrives rather than queueing it behind the current one.
         var clock = new FakeTimeProvider();
         var vm = new OverlayViewModel(clock);
         vm.ApplyState(StateWith((1, "Michael", "#22c55e", 10, 1), (3, "Lauryn", "#3b82f6", 10, 1)));
 
-        vm.EnqueueAlert(new AlertDto { TeamId = 1, LeagueKey = "main", TeamLabel = "Michael", PlayerName = "Josh Allen", TouchdownType = "passing", Count = 1 });
-        vm.EnqueueAlert(new AlertDto { TeamId = 3, LeagueKey = "main", TeamLabel = "Lauryn", PlayerName = "CMC", TouchdownType = "rushing", Count = 1 });
+        vm.ShowAlert(new AlertDto { TeamId = 1, LeagueKey = "main", TeamLabel = "Michael", PlayerName = "Josh Allen", TouchdownType = "passing", Count = 1 });
+        clock.Advance(TimeSpan.FromSeconds(8));
 
-        Assert.Equal("Michael", vm.CurrentBanner!.TeamLabel);
-        Assert.Equal(1, vm.QueuedBannerCount);
-        Assert.True(vm.Rows[0].IsPulsing);
-        Assert.False(vm.Rows[1].IsPulsing);
-
-        clock.Advance(TimeSpan.FromSeconds(5));
+        vm.ShowAlert(new AlertDto { TeamId = 3, LeagueKey = "main", TeamLabel = "Lauryn", PlayerName = "CMC", TouchdownType = "rushing", Count = 1 });
 
         Assert.Equal("Lauryn", vm.CurrentBanner!.TeamLabel);
-        Assert.Equal(0, vm.QueuedBannerCount);
         Assert.False(vm.Rows[0].IsPulsing);
         Assert.True(vm.Rows[1].IsPulsing);
 
-        clock.Advance(TimeSpan.FromSeconds(5));
+        // The first alert's timer (due at 10s) must not take the second banner down early.
+        clock.Advance(TimeSpan.FromSeconds(3));
+        Assert.True(vm.BannerVisible);
+        Assert.Equal("Lauryn", vm.CurrentBanner!.TeamLabel);
+
+        clock.Advance(TimeSpan.FromSeconds(7.1));
         Assert.False(vm.BannerVisible);
+        Assert.False(vm.Rows[1].IsPulsing);
     }
 
     [Fact]
@@ -181,7 +199,7 @@ public class OverlayViewModelTests
         vm.SetOffline(true);
         vm.ApplyState(new StateDto());
         vm.ApplySettings(new OverlaySettingsDto());
-        vm.EnqueueAlert(new AlertDto { TeamId = 1 });
+        vm.ShowAlert(new AlertDto { TeamId = 1 });
 
         Assert.Equal(4, invocations);
     }

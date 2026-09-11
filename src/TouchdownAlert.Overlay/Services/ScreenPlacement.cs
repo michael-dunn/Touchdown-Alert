@@ -61,4 +61,14 @@ public static class ScreenPlacement
         var top = dipY + marginDip;
         return (left, top);
     }
+
+    /// <summary>
+    /// Placement for the touchdown banner window: a strip the full width of the given screen, flush with its
+    /// top edge, in DIPs. The height is whatever the banner content needs; only Left/Top/Width are derived here.
+    /// </summary>
+    public static (double Left, double Top, double Width) TopStrip(ScreenInfo screen)
+    {
+        var scale = screen.Scale <= 0 ? 1.0 : screen.Scale;
+        return (screen.X / scale, screen.Y / scale, screen.Width / scale);
+    }
 }

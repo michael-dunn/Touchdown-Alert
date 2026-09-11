@@ -19,13 +19,29 @@ public static class ScreenEnumerator
         var result = new List<ScreenInfo>(screens.Length);
         foreach (var screen in screens)
         {
-            var bounds = screen.Bounds;
-            var centerX = bounds.X + bounds.Width / 2.0;
-            var centerY = bounds.Y + bounds.Height / 2.0;
-            var scale = WindowStyles.GetScaleForPoint(centerX, centerY);
-            result.Add(new ScreenInfo(screen.Primary, bounds.X, bounds.Y, bounds.Width, bounds.Height, scale));
+            result.Add(ToScreenInfo(screen));
         }
 
         return result;
+    }
+
+    /// <summary>The screen the given window currently sits on (by Win32 monitor lookup), or null for a zero handle.</summary>
+    public static ScreenInfo? GetScreenForWindow(IntPtr hwnd)
+    {
+        if (hwnd == IntPtr.Zero)
+        {
+            return null;
+        }
+
+        return ToScreenInfo(System.Windows.Forms.Screen.FromHandle(hwnd));
+    }
+
+    private static ScreenInfo ToScreenInfo(System.Windows.Forms.Screen screen)
+    {
+        var bounds = screen.Bounds;
+        var centerX = bounds.X + bounds.Width / 2.0;
+        var centerY = bounds.Y + bounds.Height / 2.0;
+        var scale = WindowStyles.GetScaleForPoint(centerX, centerY);
+        return new ScreenInfo(screen.Primary, bounds.X, bounds.Y, bounds.Width, bounds.Height, scale);
     }
 }

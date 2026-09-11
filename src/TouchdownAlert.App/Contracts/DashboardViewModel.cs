@@ -78,4 +78,7 @@ public sealed record AlertLogEntryViewModel(
     int Count,
     bool IsTest,
     string SoundFile,
-    bool SoundFound);
+    bool SoundFound,
+    /// <summary>How long clients should show this alert's banner, in seconds. Set by <see cref="Services.AlertPresenter"/>
+    /// on the "alert" hub event; the same value paces consecutive alerts so sound and banner start together.</summary>
+    double DisplaySeconds = 10);

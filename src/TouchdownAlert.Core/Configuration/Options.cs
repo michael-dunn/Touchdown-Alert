@@ -125,6 +125,14 @@ public sealed class AlertOptions
     /// sounds play in this order.
     /// </summary>
     public List<WatchedTeamOptions> WatchedTeams { get; set; } = new();
+
+    /// <summary>
+    /// How long each touchdown banner stays on screen, in seconds. Alerts are presented one at a time at this
+    /// cadence: each alert's sound starts exactly when its banner appears, so back-to-back touchdowns never
+    /// have one team's sound playing under another team's banner. Zero or negative presents every alert
+    /// immediately (tests). Lives in appsettings.json, not config/settings.json.
+    /// </summary>
+    public double BannerSeconds { get; set; } = 10;
 }
 
 public sealed class YahooOptions

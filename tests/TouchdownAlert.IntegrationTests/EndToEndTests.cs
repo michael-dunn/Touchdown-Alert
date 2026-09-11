@@ -60,12 +60,17 @@ public sealed class EndToEndTests : IAsyncLifetime
         _appFactory = new WebApplicationFactory<AppProgram>()
             .WithWebHostBuilder(builder =>
             {
+                // Own settings file so the developer's real config/settings.json (extra leagues, watched
+                // teams) can't leak into the test host.
+                builder.UseSetting("Settings:FilePath", Path.Combine(_soundsDir, "settings.json"));
+
                 builder.UseSetting("Leagues:0:Key", "main");
                 builder.UseSetting("Leagues:0:Provider", "Espn");
                 builder.UseSetting("Leagues:0:LeagueId", "998946988");
                 builder.UseSetting("Leagues:0:BaseUrl", _simulator.Server.BaseAddress.ToString());
                 builder.UseSetting("Polling:IntervalSeconds", "1");
                 builder.UseSetting("Sounds:Enabled", "false");
+                builder.UseSetting("Alerts:BannerSeconds", "0"); // present every alert immediately - no banner pacing in tests
                 builder.UseSetting("Sounds:Directory", _soundsDir);
                 builder.UseSetting("Alerts:WatchedTeams:0:TeamId", "1");
                 builder.UseSetting("Alerts:WatchedTeams:0:League", "main");
@@ -193,6 +198,8 @@ public sealed class EndToEndTests : IAsyncLifetime
         await using var twoLeagueFactory = new WebApplicationFactory<AppProgram>()
             .WithWebHostBuilder(builder =>
             {
+                builder.UseSetting("Settings:FilePath", Path.Combine(twoLeagueSoundsDir, "settings.json"));
+
                 builder.UseSetting("Leagues:0:Key", "main");
                 builder.UseSetting("Leagues:0:Provider", "Espn");
                 builder.UseSetting("Leagues:0:LeagueId", "998946988");
@@ -203,6 +210,7 @@ public sealed class EndToEndTests : IAsyncLifetime
                 builder.UseSetting("Leagues:1:BaseUrl", _simulator.Server.BaseAddress.ToString());
                 builder.UseSetting("Polling:IntervalSeconds", "1");
                 builder.UseSetting("Sounds:Enabled", "false");
+                builder.UseSetting("Alerts:BannerSeconds", "0"); // present every alert immediately - no banner pacing in tests
                 builder.UseSetting("Sounds:Directory", twoLeagueSoundsDir);
                 builder.UseSetting("Alerts:WatchedTeams:0:TeamId", "3");
                 builder.UseSetting("Alerts:WatchedTeams:0:League", "other");

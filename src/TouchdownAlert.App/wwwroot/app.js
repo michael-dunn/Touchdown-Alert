@@ -267,10 +267,14 @@
     return String(s).replace(/["\\]/g, "\\$&");
   }
 
-  // ---------- TD banner queue ----------
+  // ---------- TD banner ----------
+  // The App paces alerts (one per Alerts:BannerSeconds, sound + "alert" event together), so each alert that
+  // arrives replaces whatever banner is up and shows for the displaySeconds it carries. No client-side queue:
+  // queuing here would drift the banner away from the sound the App is already playing.
 
-  const bannerQueue = [];
-  let bannerShowing = false;
+  const DEFAULT_BANNER_SECONDS = 10;
+  let bannerHideTimer = null;
+  let bannerSlideTimer = null;
 
   function teamColorFor(leagueKey, teamId) {
     if (!lastState) return "#3fd67a";
@@ -280,16 +284,11 @@
     return (team && team.color) || "#3fd67a";
   }
 
-  function enqueueAlertBanner(alert) {
-    bannerQueue.push(alert);
-    processBannerQueue();
-  }
+  function showAlertBanner(a) {
+    clearTimeout(bannerHideTimer);
+    clearTimeout(bannerSlideTimer);
 
-  function processBannerQueue() {
-    if (bannerShowing || bannerQueue.length === 0) return;
-    bannerShowing = true;
-    const a = bannerQueue.shift();
-
+    const seconds = a.displaySeconds > 0 ? a.displaySeconds : DEFAULT_BANNER_SECONDS;
     const color = teamColorFor(a.leagueKey, a.teamId);
     const type = (a.touchdownType || "").toLowerCase();
     let text = "TOUCHDOWN \u00b7 " + (a.teamLabel || "") + " \u00b7 " + (a.playerName || "");
@@ -307,14 +306,12 @@
     void els.banner.offsetWidth;
     els.banner.classList.add("show");
 
-    setTimeout(() => {
+    bannerHideTimer = setTimeout(() => {
       els.banner.classList.remove("show");
-      setTimeout(() => {
+      bannerSlideTimer = setTimeout(() => {
         els.banner.hidden = true;
-        bannerShowing = false;
-        processBannerQueue();
       }, reduceMotion ? 0 : 350);
-    }, 5000);
+    }, seconds * 1000);
   }
 
   // ---------- Audit table ----------
@@ -392,7 +389,7 @@
 
     connection.on("state", renderAll);
     connection.on("alert", (alert) => {
-      enqueueAlertBanner(alert);
+      showAlertBanner(alert);
     });
 
     connection.onreconnecting(() => {

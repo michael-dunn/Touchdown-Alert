@@ -257,10 +257,21 @@ SignalR hub is at `/hub`; it pushes a `state` event after every poll, a `setting
 `src/TouchdownAlert.Overlay` is a small always-on-top WPF overlay for the agreed couch setup: a
 55" TV as Windows' primary display (playing the game full screen in a browser) and a laptop as the
 secondary display. The overlay sits on top of the game video, top-right by default, showing a compact two-column tile grid (like the dashboard) with one tile per
-watched team (translucent team-color tint, name, score, TD count) and a 5-second banner strip for each touchdown as it
-comes in (queued in arrival order when more than one fires close together). It connects to the App's
+watched team (translucent team-color tint, name, score, TD count). Each touchdown also gets a banner that
+slides down across the full width of the top of the display for 10 seconds, its text scrolling
+right-to-left as a continuous ticker the whole time. The banner always uses the monitor the tile grid is
+currently on (so dragging the overlay to another screen moves the banner too); the `display` setting
+only decides where the tiles go until they've been dragged somewhere. It connects to the App's
 SignalR hub (`{appUrl}/hub`) and reconnects forever with backoff if the App restarts mid-game; while
 disconnected it shows a small "offline" pill instead of disappearing.
+
+Banners and sounds run on one timeline, owned by the App: when a touchdown fires, the App starts the
+team's sound and sends the `alert` event in the same instant, and holds any further alerts until the
+banner's 10 seconds are up, then presents the next one the same way. So back-to-back touchdowns play
+out as banner 1 + sound 1, then banner 2 + sound 2 - one team's sound never plays under another team's
+banner (sounds are capped at `Sounds:MaxDurationSeconds`, 5s by default, so they end well inside the
+banner). The banner length is `Alerts:BannerSeconds` in `appsettings.json` (not `config/settings.json`);
+the overlay and dashboard read it from each alert, so changing it needs no client change.
 
 Locked (the default) it's click-through and can't be dragged - it just floats over the video. Unlock
 it from the control page (`overlay.locked = false` in settings) to drag it into place; dragging saves

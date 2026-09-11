@@ -1,0 +1,78 @@
+<Window x:Class="TouchdownAlert.Overlay.BannerWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:local="clr-namespace:TouchdownAlert.Overlay"
+        Title="TouchdownAlert Banner"
+        WindowStyle="None"
+        AllowsTransparency="True"
+        Background="Transparent"
+        ShowInTaskbar="False"
+        ShowActivated="False"
+        Focusable="False"
+        Topmost="True"
+        SizeToContent="Height"
+        ResizeMode="NoResize"
+        WindowStartupLocation="Manual">
+    <!-- The strip slides down from above the screen edge when a banner shows and back up when it hides. -->
+    <Grid ClipToBounds="True">
+        <Grid.LayoutTransform>
+            <ScaleTransform x:Name="RootScale" ScaleX="1" ScaleY="1" />
+        </Grid.LayoutTransform>
+
+        <Border x:Name="Strip" Padding="32,14,32,16" VerticalAlignment="Top">
+            <Border.Background>
+                <SolidColorBrush Color="{Binding CurrentBanner.Color, FallbackValue=#2B2F3A}" Opacity="0.92" />
+            </Border.Background>
+            <Border.RenderTransform>
+                <TranslateTransform Y="-160" />
+            </Border.RenderTransform>
+            <Border.Style>
+                <Style TargetType="Border">
+                    <Style.Triggers>
+                        <DataTrigger Binding="{Binding BannerVisible}" Value="True">
+                            <DataTrigger.EnterActions>
+                                <BeginStoryboard>
+                                    <Storyboard>
+                                        <DoubleAnimation Storyboard.TargetProperty="(Border.RenderTransform).(TranslateTransform.Y)"
+                                                         To="0" Duration="0:0:0.25">
+                                            <DoubleAnimation.EasingFunction>
+                                                <CubicEase EasingMode="EaseOut" />
+                                            </DoubleAnimation.EasingFunction>
+                                        </DoubleAnimation>
+                                    </Storyboard>
+                                </BeginStoryboard>
+                            </DataTrigger.EnterActions>
+                            <DataTrigger.ExitActions>
+                                <BeginStoryboard>
+                                    <Storyboard>
+                                        <DoubleAnimation Storyboard.TargetProperty="(Border.RenderTransform).(TranslateTransform.Y)"
+                                                         To="-160" Duration="0:0:0.25">
+                                            <DoubleAnimation.EasingFunction>
+                                                <CubicEase EasingMode="EaseIn" />
+                                            </DoubleAnimation.EasingFunction>
+                                        </DoubleAnimation>
+                                    </Storyboard>
+                                </BeginStoryboard>
+                            </DataTrigger.ExitActions>
+                        </DataTrigger>
+                    </Style.Triggers>
+                </Style>
+            </Border.Style>
+
+            <!-- Ticker: the banner text, repeated to fill the strip, scrolls right-to-left continuously.
+                 Children and the animation are built in code-behind (widths are only known after layout). -->
+            <Grid x:Name="TickerViewport" ClipToBounds="True" MinHeight="46">
+                <!-- The Canvas matters: a panel wider than its layout slot gets layout-clipped by WPF to the slot
+                     width, and that clip moves with the RenderTransform (so the tail of the text vanished).
+                     A Canvas arranges children at their full desired size, so only the viewport clips. -->
+                <Canvas Height="46" VerticalAlignment="Center">
+                    <StackPanel x:Name="Ticker" Orientation="Horizontal" Height="46" Canvas.Left="0" Canvas.Top="0">
+                        <StackPanel.RenderTransform>
+                            <TranslateTransform x:Name="TickerShift" X="0" />
+                        </StackPanel.RenderTransform>
+                    </StackPanel>
+                </Canvas>
+            </Grid>
+        </Border>
+    </Grid>
+</Window>

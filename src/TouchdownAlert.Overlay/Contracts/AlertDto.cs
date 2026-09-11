@@ -11,4 +11,7 @@ public sealed class AlertDto
     public string? TouchdownType { get; set; }
     public int Count { get; set; } = 1;
     public bool IsTest { get; set; }
+
+    /// <summary>How long the App wants this banner shown (it paces consecutive alerts by the same amount). Zero/absent = default.</summary>
+    public double DisplaySeconds { get; set; }
 }

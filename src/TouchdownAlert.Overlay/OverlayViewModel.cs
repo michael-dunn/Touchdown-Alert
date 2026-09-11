@@ -5,7 +5,7 @@ using TouchdownAlert.Overlay.Contracts;
 
 namespace TouchdownAlert.Overlay;
 
-/// <summary>One row in the overlay: a watched team's color, label, and score.</summary>
+/// <summary>One tile in the overlay: a watched team's color, label, and score.</summary>
 public sealed class TeamRowViewModel : INotifyPropertyChanged
 {
     public event PropertyChangedEventHandler? PropertyChanged;
@@ -50,21 +50,23 @@ public sealed record BannerViewModel(string TeamLabel, string PlayerName, string
 }
 
 /// <summary>
-/// The overlay's whole UI state: team rows, the TD banner queue (one banner at a time, 5s each, in arrival
-/// order), connection status, and applied overlay settings. Pure C# / INotifyPropertyChanged - no WPF types -
-/// so it's unit-testable. Every public mutator is marshalled through the optional UI-thread dispatcher
-/// (WPF's Dispatcher.Invoke in production; inline in tests) since state/alert/settings arrive on SignalR's
-/// own threads.
+/// The overlay's whole UI state: team tiles, the current TD banner, connection status, and applied overlay
+/// settings. Pure C# / INotifyPropertyChanged - no WPF types - so it's unit-testable. Every public mutator is
+/// marshalled through the optional UI-thread dispatcher (WPF's Dispatcher.Invoke in production; inline in
+/// tests) since state/alert/settings arrive on SignalR's own threads.
+///
+/// Banners are NOT queued here. The App paces alerts (one per Alerts:BannerSeconds) and starts each alert's
+/// sound at the moment it sends the "alert" event, so the banner must appear right then: a new alert replaces
+/// whatever is showing and runs for the DisplaySeconds the App attached (default 10s).
 /// </summary>
 public sealed class OverlayViewModel : INotifyPropertyChanged
 {
-    private static readonly TimeSpan BannerDuration = TimeSpan.FromSeconds(5);
+    public static readonly TimeSpan DefaultBannerDuration = TimeSpan.FromSeconds(10);
 
     public event PropertyChangedEventHandler? PropertyChanged;
 
     private readonly TimeProvider _timeProvider;
     private readonly Action<Action> _dispatch;
-    private readonly Queue<AlertDto> _bannerQueue = new();
     private ITimer? _bannerTimer;
 
     public ObservableCollection<TeamRowViewModel> Rows { get; } = new();
@@ -80,9 +82,6 @@ public sealed class OverlayViewModel : INotifyPropertyChanged
 
     private OverlaySettingsDto _settings = new();
     public OverlaySettingsDto Settings { get => _settings; private set => SetField(ref _settings, value); }
-
-    /// <summary>Number of banners still queued behind the one currently showing (for diagnostics/tests).</summary>
-    public int QueuedBannerCount => _bannerQueue.Count;
 
     public OverlayViewModel(TimeProvider? timeProvider = null, Action<Action>? dispatch = null)
     {
@@ -124,28 +123,14 @@ public sealed class OverlayViewModel : INotifyPropertyChanged
 
     public void ApplySettings(OverlaySettingsDto overlay) => _dispatch(() => Settings = overlay);
 
-    /// <summary>Queues an alert for its 5s banner; starts showing immediately if nothing is currently showing.</summary>
-    public void EnqueueAlert(AlertDto alert) => _dispatch(() =>
-    {
-        _bannerQueue.Enqueue(alert);
-        if (CurrentBanner is null)
-        {
-            ShowNextBanner();
-        }
-    });
-
-    private void ShowNextBanner()
+    /// <summary>
+    /// Shows the alert's banner immediately (replacing any banner already up, since the App has just started
+    /// this alert's sound) and pulses its team's tile, for the alert's DisplaySeconds (default 10s).
+    /// </summary>
+    public void ShowAlert(AlertDto alert) => _dispatch(() =>
     {
         ClearPulse();
 
-        if (_bannerQueue.Count == 0)
-        {
-            CurrentBanner = null;
-            BannerVisible = false;
-            return;
-        }
-
-        var alert = _bannerQueue.Dequeue();
         var row = Rows.FirstOrDefault(r => r.TeamId == alert.TeamId && r.LeagueKey == (alert.LeagueKey ?? ""));
         if (row is not null)
         {
@@ -161,12 +146,20 @@ public sealed class OverlayViewModel : INotifyPropertyChanged
             row?.Color ?? "#22c55e");
         BannerVisible = true;
 
+        var duration = alert.DisplaySeconds > 0 ? TimeSpan.FromSeconds(alert.DisplaySeconds) : DefaultBannerDuration;
         _bannerTimer?.Dispose();
         _bannerTimer = _timeProvider.CreateTimer(
-            _ => _dispatch(ShowNextBanner),
+            _ => _dispatch(HideBanner),
             null,
-            BannerDuration,
+            duration,
             Timeout.InfiniteTimeSpan);
+    });
+
+    private void HideBanner()
+    {
+        ClearPulse();
+        BannerVisible = false;
+        CurrentBanner = null;
     }
 
     private void ClearPulse()

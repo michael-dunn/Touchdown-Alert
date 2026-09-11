@@ -62,6 +62,7 @@ public sealed class YahooEndToEndTests : IAsyncLifetime
 
                 builder.UseSetting("Polling:IntervalSeconds", "1");
                 builder.UseSetting("Sounds:Enabled", "false");
+                builder.UseSetting("Alerts:BannerSeconds", "0"); // present every alert immediately - no banner pacing in tests
                 builder.UseSetting("Sounds:Directory", _soundsDir);
 
                 builder.UseSetting("Alerts:WatchedTeams:0:TeamId", "1");

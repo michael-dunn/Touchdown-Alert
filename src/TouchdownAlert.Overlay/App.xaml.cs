@@ -42,14 +42,20 @@ public partial class App : System.Windows.Application
         var viewModel = new OverlayViewModel(dispatch: action => Dispatcher.Invoke(action));
         var settingsClient = new OverlaySettingsClient(appUrl, _log);
         var window = new OverlayWindow(viewModel, settingsClient, _log);
+        var bannerWindow = new BannerWindow(viewModel, window, _log);
+
+        // Closing the overlay (its "x" when unlocked) ends the app; the banner window follows it down.
+        MainWindow = window;
+        ShutdownMode = ShutdownMode.OnMainWindowClose;
 
         _hubClient = new HubClient(appUrl, _log);
         _hubClient.StateReceived += viewModel.ApplyState;
-        _hubClient.AlertReceived += viewModel.EnqueueAlert;
+        _hubClient.AlertReceived += viewModel.ShowAlert;
         _hubClient.SettingsReceived += dto => viewModel.ApplySettings(dto.Overlay ?? new OverlaySettingsDto());
         _hubClient.ConnectionChanged += connected => viewModel.SetOffline(!connected);
 
         window.Show();
+        bannerWindow.Show();
 
         _ = _hubClient.StartAsync();
     }

@@ -57,6 +57,8 @@ builder.Services.ConfigureHttpJsonOptions(options =>
 
 builder.Services.AddSignalR();
 builder.Services.AddSingleton<DashboardState>();
+builder.Services.AddSingleton<IAlertBroadcaster, HubAlertBroadcaster>();
+builder.Services.AddSingleton<AlertPresenter>();
 builder.Services.AddSingleton<AlertDispatcher>();
 builder.Services.AddSingleton<PollingService>();
 builder.Services.AddHostedService(sp => sp.GetRequiredService<PollingService>());
